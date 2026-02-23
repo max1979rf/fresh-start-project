@@ -637,8 +637,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             id_setor: novo.idSetor,
             valor: novo.valor,
             status: novo.status,
-            data_inicio: novo.dataInicio,
-            data_vencimento: novo.dataVencimento,
+            data_inicio: novo.dataInicio || null,
+            data_vencimento: novo.dataVencimento || null,
             criado_por: novo.criadoPor,
             criado_em: novo.criadoEm,
             arquivo_pdf: novo.arquivoPdf ?? null,
@@ -672,8 +672,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         if (data.idSetor !== undefined) dbUpdate.id_setor = data.idSetor;
         if (data.valor !== undefined) dbUpdate.valor = data.valor;
         if (data.status !== undefined) dbUpdate.status = data.status;
-        if (data.dataInicio !== undefined) dbUpdate.data_inicio = data.dataInicio;
-        if (data.dataVencimento !== undefined) dbUpdate.data_vencimento = data.dataVencimento;
+        if (data.dataInicio !== undefined) dbUpdate.data_inicio = data.dataInicio || null;
+        if (data.dataVencimento !== undefined) dbUpdate.data_vencimento = data.dataVencimento || null;
         if (data.criadoPor !== undefined) dbUpdate.criado_por = data.criadoPor;
         if (data.arquivoPdf !== undefined) dbUpdate.arquivo_pdf = data.arquivoPdf;
         if (data.nomeArquivo !== undefined) dbUpdate.nome_arquivo = data.nomeArquivo;
