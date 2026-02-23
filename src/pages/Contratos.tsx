@@ -319,7 +319,7 @@ export default function Contratos() {
       })();
 
       if (llmResult) {
-        if (llmResult.empresa && !empresa) { setEmpresa(llmResult.empresa); autoFilled = true; }
+        if (llmResult.empresa) { setEmpresa(llmResult.empresa); autoFilled = true; }
         const llmDescr = llmResult.nomeContrato || llmResult.descricaoObjeto;
         if (llmDescr) { setDescricao(llmDescr); autoFilled = true; }
         if (llmResult.descricaoObjeto) { setObjeto(llmResult.descricaoObjeto); }
@@ -332,8 +332,33 @@ export default function Contratos() {
           const normalized = llmResult.dataVencimento.includes('/') ? brToIso(llmResult.dataVencimento) : llmResult.dataVencimento;
           setDataVencimento(normalized); checkAutoStatus(normalized); autoFilled = true;
         }
-        if (llmResult.tipoServico) { setTipo(llmResult.tipoServico); autoFilled = true; }
+        if (llmResult.tipoServico) {
+          // Map LLM tipo to our enum
+          const tipoMap: Record<string, string> = {
+            'serviço': 'Serviços de TI', 'serviços': 'Serviços de TI', 'serviços de ti': 'Serviços de TI',
+            'software': 'Sistema / Software', 'sistema': 'Sistema / Software',
+            'infraestrutura': 'Infraestrutura', 'implantação': 'Implantação',
+            'manutenção': 'Manutenção', 'obra': 'Obra',
+          };
+          const mapped = tipoMap[llmResult.tipoServico.toLowerCase()] || 
+            TIPOS_CONTRATO.find(t => t.toLowerCase().includes(llmResult.tipoServico!.toLowerCase())) || 
+            llmResult.tipoServico;
+          handleTipoChange(mapped); // This also sets setor and modeloCobranca
+          autoFilled = true;
+        }
         if (llmResult.vigenciaMeses) setVigenciaMeses(String(llmResult.vigenciaMeses));
+
+        // ── Apply financial values from LLM ──
+        if (llmResult.valorImplantacao) {
+          setValorImplantacao(llmResult.valorImplantacao);
+          autoFilled = true;
+        }
+        if (llmResult.valorMensalidade) {
+          setValorManutencaoMensal(llmResult.valorMensalidade);
+          // If we have mensalidade, it's a TI-style contract
+          setModeloCobranca('ti');
+          autoFilled = true;
+        }
 
         setAiBreakdown({
           valorImplantacao: llmResult.valorImplantacao || undefined,
@@ -354,16 +379,18 @@ export default function Contratos() {
       }
 
       let dateFindings: string[] = [];
-      if (fields.dataInicio || llmResult?.dataInicio) dateFindings.push(`📅 Data de início identificada`);
-      else dateFindings.push(`❓ Data de início não encontrada`);
+      if (fields.dataInicio || llmResult?.dataInicio) dateFindings.push(`📅 Data de assinatura identificada`);
+      else { dateFindings.push(`⚠️ Data de assinatura NÃO encontrada — preencha manualmente`); addAlerta({ tipo: 'geral', mensagem: `Data de assinatura não encontrada em "${file.name}"`, empresa: empresa || undefined, urgencia: 'alta' }); }
       if (fields.dataVencimento || llmResult?.dataVencimento) dateFindings.push(`📅 Data de vencimento identificada`);
-      else dateFindings.push(`❓ Data de vencimento não encontrada`);
+      else dateFindings.push(`❓ Data de vencimento será calculada pela vigência`);
+      if (!llmResult?.vigenciaMeses && !fields.vigenciaMeses) { dateFindings.push(`⚠️ Vigência NÃO identificada — preencha manualmente`); addAlerta({ tipo: 'geral', mensagem: `Vigência não encontrada em "${file.name}"`, empresa: empresa || undefined, urgencia: 'media' }); }
+      if (!llmResult?.valorTotal && !fields.valor) { dateFindings.push(`⚠️ Valor total NÃO identificado — preencha manualmente`); }
 
       setAnalysisResult({ hasAbusiveClauses: hasAbusive, missingSignature: analysis.missingSignature, findings: [...allFindings, ...dateFindings], autoFilled });
       toast({ title: "✅ Análise concluída", description: autoFilled ? "Campos preenchidos automaticamente." : "Documento analisado." });
 
       if (hasAbusive) addAlerta({ tipo: 'clausula_abusiva', mensagem: `Cláusula(s) abusiva(s) em "${file.name}"`, empresa: empresa || undefined, urgencia: 'alta' });
-      if (analysis.missingSignature) addAlerta({ tipo: 'geral', mensagem: `Assinatura não identificada em "${file.name}"`, empresa: empresa || undefined, urgencia: 'media' });
+      if (analysis.missingSignature) addAlerta({ tipo: 'geral', mensagem: `Assinatura não identificada em "${file.name}"`, empresa: empresa || undefined, urgencia: 'alta' });
 
       addLog(currentUser!.id, currentUser!.nome, 'Análise IA executada', `Arquivo: ${file.name}`);
     } catch (err) {
@@ -629,17 +656,12 @@ export default function Contratos() {
             <div className="border border-border rounded-lg p-4 space-y-3">
               <div className="flex items-center gap-3">
                 <CreditCard className="w-4 h-4 text-primary" />
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Modelo Financeiro</p>
-                <div className="flex gap-2 ml-auto">
-                  <button type="button" onClick={() => setModeloCobranca('ti')}
-                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${modeloCobranca === 'ti' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}`}>
-                    Prestação de Serviço TI
-                  </button>
-                  <button type="button" onClick={() => setModeloCobranca('geral')}
-                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${modeloCobranca === 'geral' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}`}>
-                    Demais Tipos
-                  </button>
-                </div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Modelo Financeiro {modeloCobranca === 'ti' ? '— Serviços de TI' : '— Geral'}
+                </p>
+                <span className="ml-auto text-[10px] text-muted-foreground italic">
+                  {modeloCobranca === 'ti' ? 'Implantação + Manutenção mensal' : 'Prestações fixas'}
+                </span>
               </div>
 
               {modeloCobranca === 'ti' ? (
