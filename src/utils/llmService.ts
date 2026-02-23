@@ -177,6 +177,11 @@ export interface LlmContractAnalysis {
     valorTotal?: string;
     /** Human-readable explanation of how valorTotal was calculated. */
     breakdownValor?: string;
+    /** The CONTRATANTE company (the one hiring/contracting the service). */
+    empresaContratante?: string;
+    /** The CONTRATADA company (the one providing the service). */
+    empresaContratada?: string;
+    /** @deprecated Use empresaContratante or empresaContratada instead */
     empresa?: string;
     tipoServico?: string;
     descricaoObjeto?: string;
@@ -195,7 +200,8 @@ const CONTRACT_ANALYSIS_PROMPT = `Você é um analista jurídico especializado e
   "valorMensalidade": "R$ 500,00",
   "valorTotal": "R$ 8.000,00",
   "breakdownValor": "Implantação R$ 2.000,00 + Mensalidade R$ 500,00 × 12 meses = R$ 8.000,00",
-  "empresa": "nome da empresa contratada",
+  "empresaContratante": "nome da empresa CONTRATANTE (quem está contratando o serviço)",
+  "empresaContratada": "nome da empresa CONTRATADA (quem presta o serviço)",
   "tipoServico": "Serviço|Fornecimento|Obra|Consultoria|Locação",
   "descricaoObjeto": "descrição resumida (máx 200 chars)",
   "clausulasAbusivas": [{ "descricao": "descrição", "severidade": "alta|media|baixa" }],
@@ -316,7 +322,9 @@ export async function analyzeContractWithLlm(
             valorMensalidade: parsed.valorMensalidade || undefined,
             valorTotal: parsed.valorTotal || undefined,
             breakdownValor: parsed.breakdownValor || undefined,
-            empresa: parsed.empresa || undefined,
+            empresaContratante: parsed.empresaContratante || undefined,
+            empresaContratada: parsed.empresaContratada || undefined,
+            empresa: parsed.empresa || parsed.empresaContratante || parsed.empresaContratada || undefined,
             tipoServico: parsed.tipoServico || undefined,
             descricaoObjeto: parsed.descricaoObjeto || undefined,
             clausulasAbusivas: Array.isArray(parsed.clausulasAbusivas)

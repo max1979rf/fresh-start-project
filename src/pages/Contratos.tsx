@@ -130,7 +130,16 @@ export default function Contratos() {
     toast({ title: "Tipo adicionado", description: nome });
   };
 
-  // Auto-calculate vencimento when dataInicio + vigenciaMeses change
+  // Listener para erros do Supabase
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      toast({ title: "❌ Erro ao salvar", description: detail, variant: "destructive" });
+    };
+    window.addEventListener('supabase-error', handler);
+    return () => window.removeEventListener('supabase-error', handler);
+  }, []);
+
   useEffect(() => {
     if (dataInicio && vigenciaMeses && parseInt(vigenciaMeses) > 0) {
       const calculated = addMonths(dataInicio, parseInt(vigenciaMeses));
@@ -153,11 +162,8 @@ export default function Contratos() {
       const meses = parseInt(vigenciaMeses) || 0;
       const total = impl + (mensal * meses);
       if (total > 0) setValor(formatCurrency(total));
-      // Valor da prestação = manutenção + (implantação / meses)
-      if (meses > 0) {
-        const prestacao = mensal + (impl / meses);
-        if (prestacao > 0) setValorPrestacao(formatCurrency(prestacao));
-      }
+      // Valor da prestação = valor mensal (manutenção)
+      if (mensal > 0) setValorPrestacao(formatCurrency(mensal));
     } else if (modeloCobranca === 'geral') {
       const qtd = parseInt(qtdPagamentos) || 0;
       const vlr = parseCurrency(valorPrestacao);
@@ -335,7 +341,9 @@ export default function Contratos() {
       })();
 
       if (llmResult) {
-        if (llmResult.empresa) { setEmpresa(llmResult.empresa); autoFilled = true; }
+        // Preencher empresa: priorizar contratante, depois contratada, depois genérico
+        const llmEmpresa = llmResult.empresaContratante || llmResult.empresaContratada || llmResult.empresa;
+        if (llmEmpresa) { setEmpresa(llmEmpresa); autoFilled = true; }
         const llmDescr = llmResult.nomeContrato || llmResult.descricaoObjeto;
         if (llmDescr) { setDescricao(llmDescr); autoFilled = true; }
         if (llmResult.descricaoObjeto) { setObjeto(llmResult.descricaoObjeto); }
@@ -501,10 +509,13 @@ export default function Contratos() {
       });
       addLog(currentUser!.id, currentUser!.nome, 'Contrato editado', `Contrato: ${numero.trim()}`);
     } else {
+      // Garantir data de início válida (NOT NULL no banco)
+      const dataInicioFinal = dataInicio || new Date().toISOString().split('T')[0];
+      const dataVencimentoFinal = dataVencimento || dataInicioFinal;
       const novoContrato = addContrato({
         numero: numero.trim(), descricao: descricao.trim(), empresa: empresa.trim(),
         objeto: objeto.trim() || descricao.trim(), tipo, idSetor, valor, status: statusContrato as any,
-        dataInicio: isoToBr(dataInicio), dataVencimento: isoToBr(dataVencimento),
+        dataInicio: isoToBr(dataInicioFinal), dataVencimento: isoToBr(dataVencimentoFinal),
         criadoPor: currentUser!.id, arquivoPdf, nomeArquivo,
         ...obraFields, ...financialFields,
       });
