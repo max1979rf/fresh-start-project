@@ -465,8 +465,13 @@ export default function Contratos() {
 
   const handleSave = () => {
     setError(null);
-    if (!numero.trim() || !descricao.trim() || !empresa.trim() || !idSetor) {
-      setError("Preencha todos os campos obrigatórios.");
+    const missing: string[] = [];
+    if (!numero.trim()) missing.push("Nº Contrato");
+    if (!descricao.trim()) missing.push("Nome / Descrição");
+    if (!empresa.trim()) missing.push("Empresa");
+    if (!idSetor) missing.push("Setor");
+    if (missing.length > 0) {
+      setError(`Preencha os campos obrigatórios: ${missing.join(', ')}`);
       return;
     }
 
