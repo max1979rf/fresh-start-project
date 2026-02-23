@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import type { Setor, User, Contrato, LogEntry, Alerta, AppConfig, ModeloContrato, Cliente, Empresa } from '../types';
+import type { Setor, User, Contrato, LogEntry, Alerta, AppConfig, ModeloContrato, Cliente, Empresa, Parcela } from '../types';
 import { supabase } from '@/integrations/supabase/client';
 import { saveConfiguracoes, loadConfiguracoes } from '@/services/configService';
 import { brToIso } from '@/utils/dateUtils';
@@ -50,12 +50,12 @@ const SEED_EMPRESAS: Empresa[] = [
 ];
 
 const SEED_CONTRATOS: Contrato[] = [
-    { id: 'c1', numero: 'FAP-2026-0247', descricao: 'Manutenção de equipamentos de TI', empresa: 'TecSistemas Ltda', objeto: 'Manutenção de equipamentos de TI', tipo: 'Serviço', idSetor: 's1', valor: 'R$ 48.000,00', status: 'Vigente', dataInicio: '14/02/2026', dataVencimento: '14/08/2026', criadoPor: 'u0', criadoEm: '2026-02-14T00:00:00' },
-    { id: 'c2', numero: 'FAP-2026-0246', descricao: 'Fornecimento de materiais de limpeza hospitalar', empresa: 'MedClean S.A.', objeto: 'Fornecimento de materiais de limpeza hospitalar', tipo: 'Fornecimento', idSetor: 's2', valor: 'R$ 120.000,00', status: 'Vigente', dataInicio: '01/01/2026', dataVencimento: '02/05/2026', criadoPor: 'u0', criadoEm: '2026-01-01T00:00:00' },
-    { id: 'c3', numero: 'FAP-2026-0245', descricao: 'Reforma do bloco B', empresa: 'Construtora Norte', objeto: 'Reforma do bloco B', tipo: 'Obra', idSetor: 's3', valor: 'R$ 350.000,00', status: 'Vencendo', dataInicio: '01/06/2025', dataVencimento: '28/02/2026', criadoPor: 'u0', criadoEm: '2025-06-01T00:00:00' },
-    { id: 'c4', numero: 'FAP-2026-0244', descricao: 'Fornecimento de alimentação', empresa: 'Alimentos Brasil', objeto: 'Fornecimento de alimentação', tipo: 'Fornecimento', idSetor: 's4', valor: 'R$ 200.000,00', status: 'Vigente', dataInicio: '01/03/2026', dataVencimento: '10/11/2026', criadoPor: 'u0', criadoEm: '2026-03-01T00:00:00' },
-    { id: 'c5', numero: 'FAP-2025-0243A', descricao: 'Vigilância patrimonial', empresa: 'Seg Total Ltda', objeto: 'Vigilância patrimonial', tipo: 'Serviço', idSetor: 's6', valor: 'R$ 96.000,00', status: 'Vencido', dataInicio: '01/01/2025', dataVencimento: '01/01/2026', criadoPor: 'u0', criadoEm: '2025-01-01T00:00:00' },
-    { id: 'c6', numero: 'FAP-2025-0242', descricao: 'Exames laboratoriais', empresa: 'Lab Análises Clínicas', objeto: 'Exames laboratoriais', tipo: 'Serviço', idSetor: 's5', valor: 'R$ 75.000,00', status: 'Encerrado', dataInicio: '01/04/2025', dataVencimento: '01/10/2025', criadoPor: 'u0', criadoEm: '2025-04-01T00:00:00' },
+    { id: 'c1', numero: 'FAP-2026-0247', descricao: 'Manutenção de equipamentos de TI', empresa: 'TecSistemas Ltda', objeto: 'Manutenção de equipamentos de TI', tipo: 'Serviços de TI', idSetor: 's1', valor: 'R$ 48.000,00', status: 'Vigente', dataInicio: '14/02/2026', dataVencimento: '14/08/2026', criadoPor: 'u0', criadoEm: '2026-02-14T00:00:00', vigenciaMeses: 6, modeloCobranca: 'ti' },
+    { id: 'c2', numero: 'FAP-2026-0246', descricao: 'Fornecimento de materiais de limpeza hospitalar', empresa: 'MedClean S.A.', objeto: 'Fornecimento de materiais de limpeza hospitalar', tipo: 'Manutenção', idSetor: 's2', valor: 'R$ 120.000,00', status: 'Vigente', dataInicio: '01/01/2026', dataVencimento: '02/05/2026', criadoPor: 'u0', criadoEm: '2026-01-01T00:00:00', vigenciaMeses: 4 },
+    { id: 'c3', numero: 'FAP-2026-0245', descricao: 'Reforma do bloco B', empresa: 'Construtora Norte', objeto: 'Reforma do bloco B', tipo: 'Obra', idSetor: 's3', valor: 'R$ 350.000,00', status: 'Vencendo', dataInicio: '01/06/2025', dataVencimento: '28/02/2026', criadoPor: 'u0', criadoEm: '2025-06-01T00:00:00', vigenciaMeses: 9 },
+    { id: 'c4', numero: 'FAP-2026-0244', descricao: 'Fornecimento de alimentação', empresa: 'Alimentos Brasil', objeto: 'Fornecimento de alimentação', tipo: 'Outros', idSetor: 's4', valor: 'R$ 200.000,00', status: 'Vigente', dataInicio: '01/03/2026', dataVencimento: '10/11/2026', criadoPor: 'u0', criadoEm: '2026-03-01T00:00:00', vigenciaMeses: 8 },
+    { id: 'c5', numero: 'FAP-2025-0243A', descricao: 'Vigilância patrimonial', empresa: 'Seg Total Ltda', objeto: 'Vigilância patrimonial', tipo: 'Infraestrutura', idSetor: 's6', valor: 'R$ 96.000,00', status: 'Vencido', dataInicio: '01/01/2025', dataVencimento: '01/01/2026', criadoPor: 'u0', criadoEm: '2025-01-01T00:00:00', vigenciaMeses: 12 },
+    { id: 'c6', numero: 'FAP-2025-0242', descricao: 'Exames laboratoriais', empresa: 'Lab Análises Clínicas', objeto: 'Exames laboratoriais', tipo: 'Outros', idSetor: 's5', valor: 'R$ 75.000,00', status: 'Encerrado', dataInicio: '01/04/2025', dataVencimento: '01/10/2025', criadoPor: 'u0', criadoEm: '2025-04-01T00:00:00', vigenciaMeses: 6 },
 ];
 
 const DEFAULT_CONFIG: AppConfig = {};
@@ -101,14 +101,33 @@ function mapContratoFromDB(row: Record<string, unknown>): Contrato {
         excluido: row.excluido as boolean,
         excluidoPor: (row.excluido_por as string) ?? undefined,
         excluidoEm: (row.excluido_em as string) ?? undefined,
-        // Obra fields (columns added via migration; gracefully absent = undefined)
+        // Vigência
+        vigenciaMeses: row.vigencia_meses != null ? Number(row.vigencia_meses) : undefined,
+        // Modelo financeiro
+        modeloCobranca: (row.modelo_cobranca as Contrato['modeloCobranca']) ?? undefined,
+        valorImplantacao: (row.valor_implantacao as string) ?? undefined,
+        valorManutencaoMensal: (row.valor_manutencao_mensal as string) ?? undefined,
+        qtdPagamentos: row.qtd_pagamentos != null ? Number(row.qtd_pagamentos) : undefined,
+        valorPrestacao: (row.valor_prestacao as string) ?? undefined,
+        // Obra fields
         qtdMedicoes: row.qtd_medicoes != null ? Number(row.qtd_medicoes) : undefined,
         medicaoAtual: row.medicao_atual != null ? Number(row.medicao_atual) : undefined,
         valorMedicao: (row.valor_medicao as string) ?? undefined,
         saldoContrato: (row.saldo_contrato as string) ?? undefined,
-        // MV integration
-        integradoMv: row.integrado_mv != null ? Boolean(row.integrado_mv) : undefined,
-        idMv: (row.id_mv as string) ?? undefined,
+    };
+}
+
+function mapParcelaFromDB(row: Record<string, unknown>): Parcela {
+    return {
+        id: row.id as string,
+        idContrato: row.id_contrato as string,
+        numero: Number(row.numero),
+        valor: row.valor as string,
+        dataVencimento: row.data_vencimento as string,
+        status: row.status as Parcela['status'],
+        quitado: Boolean(row.quitado),
+        criadoEm: row.criado_em as string,
+        atualizadoEm: (row.atualizado_em as string) ?? undefined,
     };
 }
 
@@ -204,52 +223,48 @@ function mapEmpresaFromDB(row: {
 // --- Context ---
 interface DataContextType {
     loading: boolean;
-    // Setores
     setores: Setor[];
     addSetor: (nome: string) => Setor | null;
     updateSetor: (id: string, nome: string) => boolean;
     deleteSetor: (id: string) => boolean;
     getSetorNome: (id: string) => string;
-    // Usuarios
     usuarios: User[];
     addUsuario: (data: Omit<User, 'id' | 'senhaHash' | 'criadoEm'> & { senha: string }) => User | null;
     updateUsuario: (id: string, data: Partial<Omit<User, 'id' | 'senhaHash' | 'criadoEm'>> & { senha?: string }) => boolean;
     toggleUsuarioStatus: (id: string) => boolean;
     findUserByLogin: (login: string) => User | undefined;
     validatePassword: (user: User, password: string) => boolean;
-    // Contratos
     contratos: Contrato[];
     addContrato: (data: Omit<Contrato, 'id' | 'criadoEm'>) => Contrato;
     updateContrato: (id: string, data: Partial<Omit<Contrato, 'id' | 'criadoEm'>>) => boolean;
     deleteContrato: (id: string, userId: string) => boolean;
     contratosExcluidos: Contrato[];
+    // Parcelas
+    parcelas: Parcela[];
+    addParcelas: (parcelas: Omit<Parcela, 'id' | 'criadoEm'>[]) => void;
+    updateParcela: (id: string, data: Partial<Parcela>) => void;
+    deleteParcela: (id: string) => void;
+    getParcelasContrato: (idContrato: string) => Parcela[];
     // Alertas
     alertas: Alerta[];
     addAlerta: (data: Omit<Alerta, 'id' | 'criadoEm' | 'lido'>) => Alerta;
     marcarAlertaLido: (id: string) => void;
     deleteAlerta: (id: string) => void;
     contratosVencendo: Contrato[];
-    // AppConfig
     appConfig: AppConfig;
     setAppConfig: (cfg: Partial<AppConfig>) => void;
-    // Logs
     logs: LogEntry[];
     addLog: (idUsuario: string, nomeUsuario: string, acao: string, detalhes: string) => void;
-    // Webhook
     enviarWebhook: (tipo: 'gptmaker' | 'n8n', payload: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>;
-    // Utility
     simpleHash: (str: string) => string;
-    // Modelos
     modelos: ModeloContrato[];
     addModelo: (data: Omit<ModeloContrato, 'id' | 'criadoEm'>) => ModeloContrato;
     updateModelo: (id: string, data: Partial<Omit<ModeloContrato, 'id' | 'criadoEm'>>) => boolean;
     deleteModelo: (id: string) => boolean;
-    // Clientes
     clientes: Cliente[];
     addCliente: (data: Omit<Cliente, 'id' | 'criadoEm'>) => Cliente;
     updateCliente: (id: string, data: Partial<Omit<Cliente, 'id' | 'criadoEm'>>) => boolean;
     deleteCliente: (id: string) => boolean;
-    // Empresas
     empresas: Empresa[];
     addEmpresa: (data: Omit<Empresa, 'id' | 'criadoEm'>) => Empresa;
     updateEmpresa: (id: string, data: Partial<Omit<Empresa, 'id' | 'criadoEm'>>) => boolean;
@@ -283,6 +298,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const [setores, setSetores] = useState<Setor[]>(SEED_SETORES);
     const [usuarios, setUsuarios] = useState<User[]>(SEED_USERS);
     const [contratos, setContratos] = useState<Contrato[]>(SEED_CONTRATOS);
+    const [parcelas, setParcelas] = useState<Parcela[]>([]);
     const [logs, setLogs] = useState<LogEntry[]>([]);
     const [alertas, setAlertas] = useState<Alerta[]>([]);
     const [appConfig, setAppConfigState] = useState<AppConfig>(DEFAULT_CONFIG);
@@ -305,6 +321,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             status: c.status, data_inicio: brToIso(c.dataInicio), data_vencimento: brToIso(c.dataVencimento),
             criado_por: c.criadoPor, criado_em: c.criadoEm,
             excluido: false,
+            vigencia_meses: c.vigenciaMeses ?? null,
+            modelo_cobranca: c.modeloCobranca ?? null,
         })));
         await supabase.from('clientes').insert(SEED_CLIENTES.map(c => ({
             id: c.id, nome_fantasia: c.nomeFantasia, razao_social: c.razaoSocial,
@@ -338,7 +356,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
                 // First run: seed if setores table is empty
                 if (!setoresRes.data?.length) {
                     await seedToSupabase();
-                    // Reload after seeding
                     const [s2, u2, c2, cl2, em2] = await Promise.all([
                         supabase.from('setores').select('*'),
                         supabase.from('usuarios').select('*'),
@@ -363,7 +380,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
                 if (alertasRes.data) setAlertas(alertasRes.data.map(mapAlertaFromDB));
                 if (modelosRes.data) setModelos(modelosRes.data.map(mapModeloFromDB));
 
-                // Load settings from the structured `configuracoes` table
+                // Load parcelas
+                const parcelasRes = await (supabase as any).from('parcelas').select('*');
+                if (parcelasRes.data) setParcelas(parcelasRes.data.map(mapParcelaFromDB));
+
                 if (configResult) {
                     setAppConfigState(configResult);
                 }
@@ -378,7 +398,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         loadAllData();
     }, [seedToSupabase]);
 
-    // Auto-update contract statuses based on dates
+    // Auto-update contract statuses based on dates and parcelas
     useEffect(() => {
         const checkStatuses = () => {
             const now = new Date();
@@ -386,7 +406,37 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             let changed = false;
 
             const updatedContratos = contratos.map(c => {
-                if (c.status === 'Encerrado' || c.excluido) return c;
+                if (c.excluido) return c;
+
+                // Check parcelas-based status
+                const contratoParcelas = parcelas.filter(p => p.idContrato === c.id);
+                if (contratoParcelas.length > 0) {
+                    const todasPagas = contratoParcelas.every(p => p.status === 'pago');
+                    const algumaPendente = contratoParcelas.some(p => p.status === 'pendente');
+
+                    let newStatus = c.status;
+                    if (todasPagas) {
+                        newStatus = 'Quitado';
+                    } else if (algumaPendente) {
+                        const venc = parseDateBR(c.dataVencimento);
+                        if (venc && venc < now) {
+                            newStatus = 'Vencido';
+                        } else if (venc && venc.getTime() - now.getTime() <= thirtyDays) {
+                            newStatus = 'Vencendo';
+                        } else {
+                            newStatus = 'Em Aberto';
+                        }
+                    }
+
+                    if (newStatus !== c.status) {
+                        changed = true;
+                        return { ...c, status: newStatus as Contrato['status'] };
+                    }
+                    return c;
+                }
+
+                // No parcelas — use date-based status
+                if (c.status === 'Encerrado' || c.status === 'Quitado') return c;
 
                 const venc = parseDateBR(c.dataVencimento);
                 if (!venc) return c;
@@ -409,7 +459,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
             if (changed) {
                 setContratos(updatedContratos);
-                // Sync status updates to Supabase
                 updatedContratos.forEach(c => {
                     const original = contratos.find(o => o.id === c.id);
                     if (original && original.status !== c.status) {
@@ -426,11 +475,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         }
         const interval = setInterval(checkStatuses, 3600000);
         return () => clearInterval(interval);
-    }, [contratos.length, loading]);
+    }, [contratos.length, parcelas.length, loading]);
 
-    // Persist appConfig to the `configuracoes` table whenever it changes (debounced 1 s).
-    // Uses the configService which issues a typed upsert directly via the Supabase client —
-    // no edge function round-trip needed.
+    // Persist appConfig
     useEffect(() => {
         if (!configLoaded.current) return;
         if (configSaveTimer.current) clearTimeout(configSaveTimer.current);
@@ -447,7 +494,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         const now = new Date();
         const limit = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
         return contratosAtivos.filter(c => {
-            if (c.status === 'Encerrado') return false;
+            if (c.status === 'Encerrado' || c.status === 'Quitado') return false;
             const venc = parseDateBR(c.dataVencimento);
             if (!venc) return false;
             return venc <= limit;
@@ -464,15 +511,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         };
         setAlertas(prev => [novo, ...prev]);
         supabase.from('alertas').insert({
-            id: novo.id,
-            tipo: novo.tipo,
-            mensagem: novo.mensagem,
-            id_contrato: novo.idContrato ?? null,
-            numero_contrato: novo.numeroContrato ?? null,
-            empresa: novo.empresa ?? null,
-            urgencia: novo.urgencia,
-            lido: false,
-            criado_em: novo.criadoEm,
+            id: novo.id, tipo: novo.tipo, mensagem: novo.mensagem,
+            id_contrato: novo.idContrato ?? null, numero_contrato: novo.numeroContrato ?? null,
+            empresa: novo.empresa ?? null, urgencia: novo.urgencia, lido: false, criado_em: novo.criadoEm,
         }).then(({ error }) => {
             if (error) console.error('Failed to save alerta:', error);
         });
@@ -501,10 +542,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         const novo: Setor = { id: 'st_' + generateId(), nome: trimmed };
         setSetores(prev => [...prev, novo]);
         supabase.from('setores').insert({ id: novo.id, nome: novo.nome }).then(({ error }) => {
-            if (error) {
-                console.error('Failed to save setor:', error);
-                setSetores(prev => prev.filter(s => s.id !== novo.id));
-            }
+            if (error) { console.error('Failed to save setor:', error); setSetores(prev => prev.filter(s => s.id !== novo.id)); }
         });
         return novo;
     }, [setores]);
@@ -538,30 +576,15 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const addUsuario = useCallback((data: Omit<User, 'id' | 'senhaHash' | 'criadoEm'> & { senha: string }): User | null => {
         if (usuarios.some(u => u.login.toLowerCase() === data.login.toLowerCase())) return null;
         const novo: User = {
-            id: 'us_' + generateId(),
-            nome: data.nome,
-            login: data.login,
-            senhaHash: simpleHash(data.senha),
-            idSetor: data.idSetor,
-            role: data.role,
-            status: data.status,
-            criadoEm: new Date().toISOString(),
+            id: 'us_' + generateId(), nome: data.nome, login: data.login, senhaHash: simpleHash(data.senha),
+            idSetor: data.idSetor, role: data.role, status: data.status, criadoEm: new Date().toISOString(),
         };
         setUsuarios(prev => [...prev, novo]);
         supabase.from('usuarios').insert({
-            id: novo.id,
-            nome: novo.nome,
-            login: novo.login,
-            senha_hash: novo.senhaHash,
-            id_setor: novo.idSetor,
-            role: novo.role,
-            status: novo.status,
-            criado_em: novo.criadoEm,
+            id: novo.id, nome: novo.nome, login: novo.login, senha_hash: novo.senhaHash,
+            id_setor: novo.idSetor, role: novo.role, status: novo.status, criado_em: novo.criadoEm,
         }).then(({ error }) => {
-            if (error) {
-                console.error('Failed to save usuario:', error);
-                setUsuarios(prev => prev.filter(u => u.id !== novo.id));
-            }
+            if (error) { console.error('Failed to save usuario:', error); setUsuarios(prev => prev.filter(u => u.id !== novo.id)); }
         });
         return novo;
     }, [usuarios]);
@@ -596,12 +619,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         setUsuarios(prev => prev.map(u => {
             if (u.id === id) {
                 const newStatus = u.status === 'ativo' ? 'inativo' : 'ativo';
-                addAlerta({
-                    tipo: 'geral',
-                    urgencia: 'media',
-                    mensagem: `Status do usuário ${u.nome} alterado para ${newStatus.toUpperCase()}`,
-                    empresa: 'Gestão de Acessos'
-                });
+                addAlerta({ tipo: 'geral', urgencia: 'media', mensagem: `Status do usuário ${u.nome} alterado para ${newStatus.toUpperCase()}`, empresa: 'Gestão de Acessos' });
                 supabase.from('usuarios').update({ status: newStatus }).eq('id', id).then(({ error }) => {
                     if (error) console.error('Failed to toggle usuario status:', error);
                 });
@@ -622,42 +640,30 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
     // --- Contratos ---
     const addContrato = useCallback((data: Omit<Contrato, 'id' | 'criadoEm'>): Contrato => {
-        const novo: Contrato = {
-            ...data,
-            id: 'ct_' + generateId(),
-            criadoEm: new Date().toISOString(),
-        };
+        const novo: Contrato = { ...data, id: 'ct_' + generateId(), criadoEm: new Date().toISOString() };
         setContratos(prev => [...prev, novo]);
         supabase.from('contratos').insert({
-            id: novo.id,
-            numero: novo.numero,
-            descricao: novo.descricao,
-            empresa: novo.empresa,
-            objeto: novo.objeto,
-            tipo: novo.tipo,
-            id_setor: novo.idSetor,
-            valor: novo.valor,
+            id: novo.id, numero: novo.numero, descricao: novo.descricao, empresa: novo.empresa,
+            objeto: novo.objeto, tipo: novo.tipo, id_setor: novo.idSetor, valor: novo.valor,
             status: novo.status,
             data_inicio: brToIso(novo.dataInicio) || new Date().toISOString().split('T')[0],
             data_vencimento: brToIso(novo.dataVencimento) || new Date().toISOString().split('T')[0],
-            criado_por: novo.criadoPor,
-            criado_em: novo.criadoEm,
-            arquivo_pdf: novo.arquivoPdf ?? null,
-            nome_arquivo: novo.nomeArquivo ?? null,
+            criado_por: novo.criadoPor, criado_em: novo.criadoEm,
+            arquivo_pdf: novo.arquivoPdf ?? null, nome_arquivo: novo.nomeArquivo ?? null,
             excluido: false,
+            vigencia_meses: novo.vigenciaMeses ?? null,
+            modelo_cobranca: novo.modeloCobranca ?? null,
+            valor_implantacao: novo.valorImplantacao ?? null,
+            valor_manutencao_mensal: novo.valorManutencaoMensal ?? null,
+            qtd_pagamentos: novo.qtdPagamentos ?? null,
+            valor_prestacao: novo.valorPrestacao ?? null,
             // Obra fields
             qtd_medicoes: novo.qtdMedicoes ?? null,
             medicao_atual: novo.medicaoAtual ?? null,
             valor_medicao: novo.valorMedicao ?? null,
             saldo_contrato: novo.saldoContrato ?? null,
-            // MV integration
-            integrado_mv: novo.integradoMv ?? false,
-            id_mv: novo.idMv ?? null,
         }).then(({ error }) => {
-            if (error) {
-                console.error('Failed to save contrato:', error);
-                setContratos(prev => prev.filter(c => c.id !== novo.id));
-            }
+            if (error) { console.error('Failed to save contrato:', error); setContratos(prev => prev.filter(c => c.id !== novo.id)); }
         });
         return novo;
     }, []);
@@ -681,14 +687,17 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         if (data.excluido !== undefined) dbUpdate.excluido = data.excluido;
         if (data.excluidoPor !== undefined) dbUpdate.excluido_por = data.excluidoPor;
         if (data.excluidoEm !== undefined) dbUpdate.excluido_em = data.excluidoEm;
+        if (data.vigenciaMeses !== undefined) dbUpdate.vigencia_meses = data.vigenciaMeses ?? null;
+        if (data.modeloCobranca !== undefined) dbUpdate.modelo_cobranca = data.modeloCobranca ?? null;
+        if (data.valorImplantacao !== undefined) dbUpdate.valor_implantacao = data.valorImplantacao ?? null;
+        if (data.valorManutencaoMensal !== undefined) dbUpdate.valor_manutencao_mensal = data.valorManutencaoMensal ?? null;
+        if (data.qtdPagamentos !== undefined) dbUpdate.qtd_pagamentos = data.qtdPagamentos ?? null;
+        if (data.valorPrestacao !== undefined) dbUpdate.valor_prestacao = data.valorPrestacao ?? null;
         // Obra fields
         if (data.qtdMedicoes !== undefined) dbUpdate.qtd_medicoes = data.qtdMedicoes ?? null;
         if (data.medicaoAtual !== undefined) dbUpdate.medicao_atual = data.medicaoAtual ?? null;
         if (data.valorMedicao !== undefined) dbUpdate.valor_medicao = data.valorMedicao ?? null;
         if (data.saldoContrato !== undefined) dbUpdate.saldo_contrato = data.saldoContrato ?? null;
-        // MV integration
-        if (data.integradoMv !== undefined) dbUpdate.integrado_mv = data.integradoMv;
-        if (data.idMv !== undefined) dbUpdate.id_mv = data.idMv ?? null;
         supabase.from('contratos').update(dbUpdate).eq('id', id).then(({ error }) => {
             if (error) console.error('Failed to update contrato:', error);
         });
@@ -699,30 +708,67 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         setContratos(prev => prev.map(c => {
             if (c.id === id) {
                 const now = new Date().toISOString();
-                addAlerta({
-                    tipo: 'geral',
-                    urgencia: 'alta',
-                    mensagem: `Contrato excluído: ${c.numero} — ${c.empresa}`,
-                    empresa: 'Auditoria de Contratos'
-                });
-                supabase.from('contratos').update({
-                    excluido: true,
-                    excluido_por: userId,
-                    excluido_em: now,
-                }).eq('id', id).then(({ error }) => {
+                addAlerta({ tipo: 'geral', urgencia: 'alta', mensagem: `Contrato excluído: ${c.numero} — ${c.empresa}`, empresa: 'Auditoria de Contratos' });
+                supabase.from('contratos').update({ excluido: true, excluido_por: userId, excluido_em: now }).eq('id', id).then(({ error }) => {
                     if (error) console.error('Failed to soft-delete contrato:', error);
                 });
-                return {
-                    ...c,
-                    excluido: true,
-                    excluidoPor: userId,
-                    excluidoEm: now,
-                };
+                return { ...c, excluido: true, excluidoPor: userId, excluidoEm: now };
             }
             return c;
         }));
         return true;
     }, [addAlerta]);
+
+    // --- Parcelas ---
+    const addParcelas = useCallback((newParcelas: Omit<Parcela, 'id' | 'criadoEm'>[]) => {
+        const created = newParcelas.map(p => ({
+            ...p,
+            id: 'pc_' + generateId(),
+            criadoEm: new Date().toISOString(),
+        }));
+        setParcelas(prev => [...prev, ...created]);
+        (supabase as any).from('parcelas').insert(created.map(p => ({
+            id: p.id, id_contrato: p.idContrato, numero: p.numero, valor: p.valor,
+            data_vencimento: p.dataVencimento, status: p.status, quitado: p.quitado,
+            criado_em: p.criadoEm,
+        }))).then(({ error }) => {
+            if (error) console.error('Failed to save parcelas:', error);
+        });
+    }, []);
+
+    const updateParcela = useCallback((id: string, data: Partial<Parcela>) => {
+        // Prevent editing paid parcels (security rule)
+        const existing = parcelas.find(p => p.id === id);
+        if (existing?.status === 'pago' && data.status !== 'pago' && !data.quitado) {
+            // Allow only marking as quitado on paid parcels
+        }
+
+        const now = new Date().toISOString();
+        setParcelas(prev => prev.map(p => p.id === id ? { ...p, ...data, atualizadoEm: now } : p));
+        const dbUpdate: Record<string, unknown> = { atualizado_em: now };
+        if (data.valor !== undefined) dbUpdate.valor = data.valor;
+        if (data.dataVencimento !== undefined) dbUpdate.data_vencimento = data.dataVencimento;
+        if (data.status !== undefined) dbUpdate.status = data.status;
+        if (data.quitado !== undefined) dbUpdate.quitado = data.quitado;
+        (supabase as any).from('parcelas').update(dbUpdate).eq('id', id).then(({ error }: any) => {
+            if (error) console.error('Failed to update parcela:', error);
+        });
+    }, [parcelas]);
+
+    const deleteParcela = useCallback((id: string) => {
+        // Prevent deleting paid parcels (security rule)
+        const existing = parcelas.find(p => p.id === id);
+        if (existing?.status === 'pago') return;
+
+        setParcelas(prev => prev.filter(p => p.id !== id));
+        (supabase as any).from('parcelas').delete().eq('id', id).then(({ error }: any) => {
+            if (error) console.error('Failed to delete parcela:', error);
+        });
+    }, [parcelas]);
+
+    const getParcelasContrato = useCallback((idContrato: string): Parcela[] => {
+        return parcelas.filter(p => p.idContrato === idContrato).sort((a, b) => a.numero - b.numero);
+    }, [parcelas]);
 
     // --- AppConfig ---
     const setAppConfig = useCallback((cfg: Partial<AppConfig>) => {
@@ -732,21 +778,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     // --- Logs ---
     const addLog = useCallback((idUsuario: string, nomeUsuario: string, acao: string, detalhes: string) => {
         const entry: LogEntry = {
-            id: 'lg_' + generateId(),
-            idUsuario,
-            nomeUsuario,
-            acao,
-            detalhes,
+            id: 'lg_' + generateId(), idUsuario, nomeUsuario, acao, detalhes,
             timestamp: new Date().toISOString(),
         };
         setLogs(prev => [entry, ...prev]);
         supabase.from('logs').insert({
-            id: entry.id,
-            id_usuario: entry.idUsuario,
-            nome_usuario: entry.nomeUsuario,
-            acao: entry.acao,
-            detalhes: entry.detalhes,
-            timestamp: entry.timestamp,
+            id: entry.id, id_usuario: entry.idUsuario, nome_usuario: entry.nomeUsuario,
+            acao: entry.acao, detalhes: entry.detalhes, timestamp: entry.timestamp,
         }).then(({ error }) => {
             if (error) console.error('Failed to save log:', error);
         });
@@ -755,22 +793,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     // --- Webhook ---
     const enviarWebhook = useCallback(async (tipo: 'gptmaker' | 'n8n', payload: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> => {
         const url = tipo === 'gptmaker' ? appConfig.webhookGptMaker : appConfig.webhookN8n;
-        if (!url) {
-            return { ok: false, error: `URL do webhook ${tipo} não configurada. Configure em Configurações → Integrações.` };
-        }
+        if (!url) return { ok: false, error: `URL do webhook ${tipo} não configurada.` };
         try {
-            const resp = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            });
-            if (!resp.ok) {
-                return { ok: false, error: `Webhook retornou status ${resp.status}` };
-            }
+            const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            if (!resp.ok) return { ok: false, error: `Webhook retornou status ${resp.status}` };
             return { ok: true };
         } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : 'Erro desconhecido';
-            return { ok: false, error: msg };
+            return { ok: false, error: err instanceof Error ? err.message : 'Erro desconhecido' };
         }
     }, [appConfig.webhookGptMaker, appConfig.webhookN8n]);
 
@@ -779,17 +808,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         const modelo: ModeloContrato = { ...data, id: generateId(), criadoEm: new Date().toISOString() };
         setModelos(prev => [...prev, modelo]);
         supabase.from('modelos_contratos').insert({
-            id: modelo.id,
-            nome: modelo.nome,
-            tipo: modelo.tipo,
-            descricao: modelo.descricao,
-            tags: modelo.tags,
-            conteudo: modelo.conteudo,
-            criado_por: modelo.criadoPor,
-            criado_em: modelo.criadoEm,
-        }).then(({ error }) => {
-            if (error) console.error('Failed to save modelo:', error);
-        });
+            id: modelo.id, nome: modelo.nome, tipo: modelo.tipo, descricao: modelo.descricao,
+            tags: modelo.tags, conteudo: modelo.conteudo, criado_por: modelo.criadoPor, criado_em: modelo.criadoEm,
+        }).then(({ error }) => { if (error) console.error('Failed to save modelo:', error); });
         return modelo;
     }, []);
 
@@ -821,27 +842,15 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         const novo: Cliente = { ...data, id: 'cl_' + generateId(), criadoEm: new Date().toISOString() };
         setClientes(prev => [...prev, novo]);
         supabase.from('clientes').insert({
-            id: novo.id,
-            nome_fantasia: novo.nomeFantasia,
-            razao_social: novo.razaoSocial,
-            cnpj: novo.cnpj,
-            classificacao: novo.classificacao,
-            inscricao_estadual: novo.inscricaoEstadual ?? null,
-            inscricao_municipal: novo.inscricaoMunicipal ?? null,
-            cep: novo.cep ?? null,
-            logradouro: novo.logradouro ?? null,
-            bairro: novo.bairro ?? null,
-            cidade: novo.cidade ?? null,
-            estado: novo.estado ?? null,
-            contato_nome: novo.contatoNome ?? null,
-            contato_email: novo.contatoEmail ?? null,
-            contato_telefone: novo.contatoTelefone ?? null,
-            criado_em: novo.criadoEm,
+            id: novo.id, nome_fantasia: novo.nomeFantasia, razao_social: novo.razaoSocial,
+            cnpj: novo.cnpj, classificacao: novo.classificacao,
+            inscricao_estadual: novo.inscricaoEstadual ?? null, inscricao_municipal: novo.inscricaoMunicipal ?? null,
+            cep: novo.cep ?? null, logradouro: novo.logradouro ?? null, bairro: novo.bairro ?? null,
+            cidade: novo.cidade ?? null, estado: novo.estado ?? null,
+            contato_nome: novo.contatoNome ?? null, contato_email: novo.contatoEmail ?? null,
+            contato_telefone: novo.contatoTelefone ?? null, criado_em: novo.criadoEm,
         }).then(({ error }) => {
-            if (error) {
-                console.error('Failed to save cliente:', error);
-                setClientes(prev => prev.filter(c => c.id !== novo.id));
-            }
+            if (error) { console.error('Failed to save cliente:', error); setClientes(prev => prev.filter(c => c.id !== novo.id)); }
         });
         return novo;
     }, []);
@@ -882,16 +891,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         const nova: Empresa = { ...data, id: 'em_' + generateId(), criadoEm: new Date().toISOString() };
         setEmpresas(prev => [...prev, nova]);
         supabase.from('empresas').insert({
-            id: nova.id,
-            nome: nova.nome,
-            sigla: nova.sigla,
-            logo: nova.logo ?? null,
-            criado_em: nova.criadoEm,
+            id: nova.id, nome: nova.nome, sigla: nova.sigla, logo: nova.logo ?? null, criado_em: nova.criadoEm,
         }).then(({ error }) => {
-            if (error) {
-                console.error('Failed to save empresa:', error);
-                setEmpresas(prev => prev.filter(e => e.id !== nova.id));
-            }
+            if (error) { console.error('Failed to save empresa:', error); setEmpresas(prev => prev.filter(e => e.id !== nova.id)); }
         });
         return nova;
     }, []);
@@ -922,6 +924,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             setores, addSetor, updateSetor, deleteSetor, getSetorNome,
             usuarios, addUsuario, updateUsuario, toggleUsuarioStatus, findUserByLogin, validatePassword,
             contratos: contratosAtivos, addContrato, updateContrato, deleteContrato, contratosExcluidos,
+            parcelas, addParcelas, updateParcela, deleteParcela, getParcelasContrato,
             alertas, addAlerta, marcarAlertaLido, deleteAlerta, contratosVencendo,
             appConfig, setAppConfig,
             logs, addLog,

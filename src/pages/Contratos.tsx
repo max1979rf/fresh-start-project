@@ -1,7 +1,7 @@
-import { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "@/hooks/use-toast";
-import { Plus, Search, FileText, Pencil, Trash2, Clock, X, AlertCircle, Eye, Download, Upload, Send, Loader2 } from "lucide-react";
+import { Plus, Search, FileText, Pencil, Trash2, Clock, X, AlertCircle, Eye, Download, Upload, Send, Loader2, CheckCircle2, CreditCard } from "lucide-react";
 import { useData } from "../contexts/DataContext";
 import { useAuth } from "../contexts/AuthContext";
 import ContratoViewer from "../components/ContratoViewer";
@@ -9,24 +9,60 @@ import AnalysisAlert, { type AnalysisResult } from "../components/AnalysisAlert"
 import { extractTextFromPdf, extractTextFromDocx, parseContractFields, parseVigenciaMeses, analyzeContract, analyzeValues, generateContractNumber } from "../utils/pdfAnalyzer";
 import { analyzeContractWithLlm } from "../utils/llmService";
 import { brToIso, isoToBr } from "../utils/dateUtils";
+import type { TipoContrato, ModeloCobranca, Parcela } from "../types";
+
+const TIPOS_CONTRATO: TipoContrato[] = ['Serviços de TI', 'Sistema / Software', 'Infraestrutura', 'Implantação', 'Manutenção', 'Obra', 'Outros'];
+
+// Map tipo -> setor suggestion
+const TIPO_SETOR_MAP: Record<string, string> = {
+  'Serviços de TI': 'Tecnologia da Informação',
+  'Sistema / Software': 'Tecnologia da Informação',
+  'Infraestrutura': 'Infraestrutura',
+  'Implantação': 'Tecnologia da Informação',
+  'Manutenção': 'Infraestrutura',
+  'Obra': 'Infraestrutura',
+};
 
 const statusStyle: Record<string, string> = {
   Vigente: "bg-success/10 text-success",
   Vencendo: "bg-warning/10 text-warning",
   Vencido: "bg-destructive/10 text-destructive",
   Encerrado: "bg-muted text-muted-foreground",
+  Quitado: "bg-primary/10 text-primary",
+  "Em Aberto": "bg-accent/10 text-accent-foreground",
 };
+
+function parseCurrency(val: string): number {
+  if (!val) return 0;
+  return parseFloat(val.replace(/[^\d.,]/g, '').replace('.', '').replace(',', '.')) || 0;
+}
+
+function formatCurrency(val: number): string {
+  return `R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function addMonths(dateStr: string, months: number): string {
+  if (!dateStr) return '';
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(y, m - 1 + months, d);
+  // Handle month overflow (e.g., Jan 31 + 1 month = Feb 28)
+  if (date.getDate() !== d) {
+    date.setDate(0); // Last day of previous month
+  }
+  return date.toISOString().split('T')[0];
+}
 
 // ─── Component ──────────────────────────────────────────────────
 
 export default function Contratos() {
-  const { contratos, addContrato, updateContrato, deleteContrato, setores, getSetorNome, addLog, enviarWebhook, addAlerta, appConfig } = useData();
+  const { contratos, addContrato, updateContrato, deleteContrato, setores, getSetorNome, addLog, enviarWebhook, addAlerta, appConfig, parcelas, addParcelas, updateParcela, deleteParcela, getParcelasContrato } = useData();
   const { currentUser, isAdmin } = useAuth();
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filterSetor, setFilterSetor] = useState<string>("");
+  const [filterStatus, setFilterStatus] = useState<string>("");
 
   // PDF viewer state
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -35,43 +71,90 @@ export default function Contratos() {
   // Webhook state
   const [sendingWebhook, setSendingWebhook] = useState<string | null>(null);
 
+  // Parcelas view state
+  const [parcelasViewId, setParcelasViewId] = useState<string | null>(null);
+
   // Form fields
   const [numero, setNumero] = useState("");
   const [descricao, setDescricao] = useState("");
   const [empresa, setEmpresa] = useState("");
   const [objeto, setObjeto] = useState("");
-  const [tipo, setTipo] = useState("Serviço");
+  const [tipo, setTipo] = useState<string>("Serviços de TI");
   const [idSetor, setIdSetor] = useState("");
   const [valor, setValor] = useState("");
-  const [statusContrato, setStatusContrato] = useState<'Vigente' | 'Vencendo' | 'Vencido' | 'Encerrado'>('Vigente');
+  const [statusContrato, setStatusContrato] = useState<string>('Vigente');
   const [dataInicio, setDataInicio] = useState("");
   const [dataVencimento, setDataVencimento] = useState("");
+  const [vigenciaMeses, setVigenciaMeses] = useState<string>("");
   const [arquivoPdf, setArquivoPdf] = useState<string | undefined>(undefined);
   const [nomeArquivo, setNomeArquivo] = useState<string | undefined>(undefined);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Campos de Obra (construção civil)
+  // Financial model
+  const [modeloCobranca, setModeloCobranca] = useState<ModeloCobranca>('geral');
+  const [valorImplantacao, setValorImplantacao] = useState("");
+  const [valorManutencaoMensal, setValorManutencaoMensal] = useState("");
+  const [qtdPagamentos, setQtdPagamentos] = useState<string>("");
+  const [valorPrestacao, setValorPrestacao] = useState("");
+
+  // Obra fields
   const [qtdMedicoes, setQtdMedicoes] = useState<string>("");
   const [medicaoAtual, setMedicaoAtual] = useState<string>("");
   const [valorMedicao, setValorMedicao] = useState<string>("");
   const [saldoContrato, setSaldoContrato] = useState<string>("");
 
-  // Integração Sistema MV
-  const [integradoMv, setIntegradoMv] = useState<boolean>(false);
-  const [idMv, setIdMv] = useState<string>("");
-
   // AI Analysis state
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
-
-  // AI breakdown — value + date details surfaced from the LLM/local parser
   const [aiBreakdown, setAiBreakdown] = useState<{
     valorImplantacao?: string;
     valorMensalidade?: string;
     breakdownValor?: string;
     vigenciaMeses?: number;
-    vigenciaTexto?: string; // human-readable: "12 meses"
+    vigenciaTexto?: string;
   } | null>(null);
+
+  // Auto-calculate vencimento when dataInicio + vigenciaMeses change
+  useEffect(() => {
+    if (dataInicio && vigenciaMeses && parseInt(vigenciaMeses) > 0) {
+      const calculated = addMonths(dataInicio, parseInt(vigenciaMeses));
+      setDataVencimento(calculated);
+    }
+  }, [dataInicio, vigenciaMeses]);
+
+  // Auto-calculate valor total based on modelo
+  useEffect(() => {
+    if (modeloCobranca === 'ti') {
+      const impl = parseCurrency(valorImplantacao);
+      const mensal = parseCurrency(valorManutencaoMensal);
+      const meses = parseInt(vigenciaMeses) || 0;
+      const total = impl + (mensal * meses);
+      if (total > 0) setValor(formatCurrency(total));
+    } else if (modeloCobranca === 'geral') {
+      const qtd = parseInt(qtdPagamentos) || 0;
+      const vlr = parseCurrency(valorPrestacao);
+      const total = qtd * vlr;
+      if (total > 0) setValor(formatCurrency(total));
+    }
+  }, [modeloCobranca, valorImplantacao, valorManutencaoMensal, vigenciaMeses, qtdPagamentos, valorPrestacao]);
+
+  // Auto-set setor based on tipo
+  const handleTipoChange = (newTipo: string) => {
+    setTipo(newTipo);
+    if (isAdmin) {
+      const suggestedSetorName = TIPO_SETOR_MAP[newTipo];
+      if (suggestedSetorName) {
+        const found = setores.find(s => s.nome === suggestedSetorName);
+        if (found && !idSetor) setIdSetor(found.id);
+      }
+    }
+    // Auto-set modelo_cobranca based on tipo
+    if (newTipo === 'Serviços de TI' || newTipo === 'Sistema / Software' || newTipo === 'Implantação' || newTipo === 'Manutenção') {
+      setModeloCobranca('ti');
+    } else {
+      setModeloCobranca('geral');
+    }
+  };
 
   // Filter by sector for non-admin
   const visibleContracts = isAdmin
@@ -84,24 +167,24 @@ export default function Contratos() {
       c.numero.toLowerCase().includes(s) ||
       c.empresa.toLowerCase().includes(s) ||
       c.objeto.toLowerCase().includes(s) ||
-      getSetorNome(c.idSetor).toLowerCase().includes(s) ||
-      c.idSetor.toLowerCase().includes(s);
+      getSetorNome(c.idSetor).toLowerCase().includes(s);
     const matchesFilter = !filterSetor || c.idSetor === filterSetor;
-    return matchesSearch && matchesFilter;
+    const matchesStatus = !filterStatus || c.status === filterStatus;
+    return matchesSearch && matchesFilter && matchesStatus;
   });
 
   const resetForm = () => {
     setShowForm(false);
     setEditingId(null);
     setNumero(""); setDescricao(""); setEmpresa(""); setObjeto("");
-    setTipo("Serviço"); setIdSetor(isAdmin ? "" : (currentUser?.idSetor || ""));
+    setTipo("Serviços de TI"); setIdSetor(isAdmin ? "" : (currentUser?.idSetor || ""));
     setValor(""); setStatusContrato('Vigente');
-    setDataInicio(""); setDataVencimento("");
+    setDataInicio(""); setDataVencimento(""); setVigenciaMeses("");
     setArquivoPdf(undefined); setNomeArquivo(undefined);
-    // Obra
+    setModeloCobranca('geral');
+    setValorImplantacao(""); setValorManutencaoMensal("");
+    setQtdPagamentos(""); setValorPrestacao("");
     setQtdMedicoes(""); setMedicaoAtual(""); setValorMedicao(""); setSaldoContrato("");
-    // MV
-    setIntegradoMv(false); setIdMv("");
     setError(null);
     setAiBreakdown(null);
     setAnalysisResult(null);
@@ -125,16 +208,18 @@ export default function Contratos() {
     setStatusContrato(c.status);
     setDataInicio(brToIso(c.dataInicio));
     setDataVencimento(brToIso(c.dataVencimento));
+    setVigenciaMeses(c.vigenciaMeses != null ? String(c.vigenciaMeses) : "");
     setArquivoPdf(c.arquivoPdf);
     setNomeArquivo(c.nomeArquivo);
-    // Obra
+    setModeloCobranca(c.modeloCobranca || 'geral');
+    setValorImplantacao(c.valorImplantacao || "");
+    setValorManutencaoMensal(c.valorManutencaoMensal || "");
+    setQtdPagamentos(c.qtdPagamentos != null ? String(c.qtdPagamentos) : "");
+    setValorPrestacao(c.valorPrestacao || "");
     setQtdMedicoes(c.qtdMedicoes != null ? String(c.qtdMedicoes) : "");
     setMedicaoAtual(c.medicaoAtual != null ? String(c.medicaoAtual) : "");
     setValorMedicao(c.valorMedicao ?? "");
     setSaldoContrato(c.saldoContrato ?? "");
-    // MV
-    setIntegradoMv(c.integradoMv ?? false);
-    setIdMv(c.idMv ?? "");
     setShowForm(true);
     setError(null);
   };
@@ -146,16 +231,9 @@ export default function Contratos() {
     const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
     const isDocx = file.name.toLowerCase().endsWith('.docx') || file.name.toLowerCase().endsWith('.doc') || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
-    if (!isPdf && !isDocx) {
-      setError('Apenas arquivos PDF ou DOCX são permitidos.');
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      setError('Arquivo muito grande. Limite de 10MB.');
-      return;
-    }
+    if (!isPdf && !isDocx) { setError('Apenas arquivos PDF ou DOCX são permitidos.'); return; }
+    if (file.size > 10 * 1024 * 1024) { setError('Arquivo muito grande. Limite de 10MB.'); return; }
 
-    // Read file as base64 (for storage / PDF viewer)
     const dataUri = await new Promise<string>((resolve) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result as string);
@@ -166,13 +244,8 @@ export default function Contratos() {
     setNomeArquivo(file.name);
     setError(null);
 
-    // Open form if not open
-    if (!showForm) {
-      setShowForm(true);
-      setEditingId(null);
-    }
+    if (!showForm) { setShowForm(true); setEditingId(null); }
 
-    // Start analysis
     setAnalysisLoading(true);
     setAnalysisResult(null);
 
@@ -182,25 +255,16 @@ export default function Contratos() {
       const thirtyDays = 30 * 24 * 60 * 60 * 1000;
       const [y, m, d] = venc.split('-').map(Number);
       const vencDate = new Date(y, m - 1, d);
-
       if (vencDate < now) setStatusContrato('Vencido');
       else if (vencDate.getTime() - now.getTime() <= thirtyDays) setStatusContrato('Vencendo');
       else setStatusContrato('Vigente');
     };
 
     try {
-      toast({
-        title: "🔍 Transcrevendo...",
-        description: `Processando "${file.name}" para extração de texto...`
-      });
+      toast({ title: "🔍 Transcrevendo...", description: `Processando "${file.name}"...` });
 
-      // Extract text from PDF or DOCX.
-      // Pass appConfig so the OCR fallback via LLM vision is available for scanned PDFs.
-      const text = isDocx
-        ? await extractTextFromDocx(file)
-        : await extractTextFromPdf(dataUri, appConfig);
+      const text = isDocx ? await extractTextFromDocx(file) : await extractTextFromPdf(dataUri, appConfig);
 
-      // Auto-fill form fields from extracted text (local regex)
       let autoFilled = false;
       let fields: ReturnType<typeof parseContractFields> = {};
       if (text.length > 20) {
@@ -208,7 +272,6 @@ export default function Contratos() {
         const autoNumero = fields.numero || generateContractNumber(contratos.map(c => c.numero));
         if (!numero) { setNumero(autoNumero); autoFilled = true; }
         if (fields.empresa && !empresa) { setEmpresa(fields.empresa); autoFilled = true; }
-        // Descrição: prefer the contract title/name, fall back to the object clause text
         if (!descricao) {
           const localDescr = fields.nomeContrato || fields.objeto;
           if (localDescr) { setDescricao(localDescr); autoFilled = true; }
@@ -216,64 +279,38 @@ export default function Contratos() {
         if (fields.objeto) { setObjeto(fields.objeto); }
         if (fields.valor) { setValor(fields.valor); autoFilled = true; }
         if (fields.dataInicio) { setDataInicio(fields.dataInicio); autoFilled = true; }
-        if (fields.dataVencimento) {
-          setDataVencimento(fields.dataVencimento);
-          checkAutoStatus(fields.dataVencimento);
-          autoFilled = true;
-        }
+        if (fields.dataVencimento) { setDataVencimento(fields.dataVencimento); checkAutoStatus(fields.dataVencimento); autoFilled = true; }
         if (fields.tipo) { setTipo(fields.tipo); autoFilled = true; }
-
-        // Populate breakdown with locally detected vigência
         if (fields.vigenciaMeses) {
-          setAiBreakdown(prev => ({
-            ...prev,
-            vigenciaMeses: fields.vigenciaMeses,
-            vigenciaTexto: `${fields.vigenciaMeses} ${fields.vigenciaMeses === 1 ? 'mês' : 'meses'}`,
-          }));
+          setVigenciaMeses(String(fields.vigenciaMeses));
+          setAiBreakdown(prev => ({ ...prev, vigenciaMeses: fields.vigenciaMeses, vigenciaTexto: `${fields.vigenciaMeses} ${fields.vigenciaMeses === 1 ? 'mês' : 'meses'}` }));
         }
       } else {
-        // Try to parse vigência even when other regex fails
         const vm = parseVigenciaMeses(text);
-        if (vm) setAiBreakdown(prev => ({ ...prev, vigenciaMeses: vm, vigenciaTexto: `${vm} ${vm === 1 ? 'mês' : 'meses'}` }));
-        if (!numero) {
-          setNumero(generateContractNumber(contratos.map(c => c.numero)));
-          autoFilled = true;
-        }
+        if (vm) { setVigenciaMeses(String(vm)); setAiBreakdown(prev => ({ ...prev, vigenciaMeses: vm, vigenciaTexto: `${vm} ${vm === 1 ? 'mês' : 'meses'}` })); }
+        if (!numero) { setNumero(generateContractNumber(contratos.map(c => c.numero))); autoFilled = true; }
       }
 
-      // Local AI analysis — clauses + signatures
       const analysis = analyzeContract(text);
       const valueAnalysis = analyzeValues(text);
       let allFindings = [...analysis.findings, ...valueAnalysis.alertas];
       let hasAbusive = analysis.hasAbusiveClauses;
 
-      // LLM-powered deep analysis (if configured and connected)
       const llmConfigured = !!(appConfig.llmApiKey && appConfig.llmStatus === 'connected');
       const llmResult = await (async () => {
         if (llmConfigured) {
-          toast({
-            title: "🧠 IA Analisando Contrato",
-            description: "Identificando cláusulas, valores e datas com alta precisão..."
-          });
+          toast({ title: "🧠 IA Analisando Contrato", description: "Identificando cláusulas, valores e datas..." });
           return analyzeContractWithLlm(appConfig, text);
         }
-        // Inform the user why advanced extraction is limited
-        toast({
-          title: "Análise local concluída",
-          description: "Configure a IA em Configurações para extração automática de valores e datas.",
-        });
+        toast({ title: "Análise local concluída", description: "Configure a IA em Configurações para extração avançada." });
         return null;
       })();
 
       if (llmResult) {
-        // Override fields with LLM results (higher accuracy)
         if (llmResult.empresa && !empresa) { setEmpresa(llmResult.empresa); autoFilled = true; }
-        // Descrição: use contract title from LLM (preferred), fall back to object description
-        {
-          const llmDescr = llmResult.nomeContrato || llmResult.descricaoObjeto;
-          if (llmDescr) { setDescricao(llmDescr); autoFilled = true; }
-          if (llmResult.descricaoObjeto) { setObjeto(llmResult.descricaoObjeto); }
-        }
+        const llmDescr = llmResult.nomeContrato || llmResult.descricaoObjeto;
+        if (llmDescr) { setDescricao(llmDescr); autoFilled = true; }
+        if (llmResult.descricaoObjeto) { setObjeto(llmResult.descricaoObjeto); }
         if (llmResult.valorTotal) { setValor(llmResult.valorTotal); autoFilled = true; }
         if (llmResult.dataInicio) {
           const normalized = llmResult.dataInicio.includes('/') ? brToIso(llmResult.dataInicio) : llmResult.dataInicio;
@@ -281,24 +318,19 @@ export default function Contratos() {
         }
         if (llmResult.dataVencimento) {
           const normalized = llmResult.dataVencimento.includes('/') ? brToIso(llmResult.dataVencimento) : llmResult.dataVencimento;
-          setDataVencimento(normalized);
-          checkAutoStatus(normalized);
-          autoFilled = true;
+          setDataVencimento(normalized); checkAutoStatus(normalized); autoFilled = true;
         }
         if (llmResult.tipoServico) { setTipo(llmResult.tipoServico); autoFilled = true; }
+        if (llmResult.vigenciaMeses) setVigenciaMeses(String(llmResult.vigenciaMeses));
 
-        // Populate / overwrite breakdown with richer LLM data
         setAiBreakdown({
           valorImplantacao: llmResult.valorImplantacao || undefined,
           valorMensalidade: llmResult.valorMensalidade || undefined,
           breakdownValor: llmResult.breakdownValor || undefined,
           vigenciaMeses: llmResult.vigenciaMeses,
-          vigenciaTexto: llmResult.vigenciaMeses
-            ? `${llmResult.vigenciaMeses} ${llmResult.vigenciaMeses === 1 ? 'mês' : 'meses'}`
-            : undefined,
+          vigenciaTexto: llmResult.vigenciaMeses ? `${llmResult.vigenciaMeses} ${llmResult.vigenciaMeses === 1 ? 'mês' : 'meses'}` : undefined,
         });
 
-        // Merge LLM abusive clauses
         if (llmResult.clausulasAbusivas.length > 0) {
           hasAbusive = true;
           llmResult.clausulasAbusivas.forEach(c => {
@@ -306,67 +338,75 @@ export default function Contratos() {
             allFindings.push(`${icon} [IA] ${c.descricao}`);
           });
         }
-        // Merge LLM alerts (excluding redundant breakdown description)
-        llmResult.alertas.forEach(a => {
-          allFindings.push(`ℹ️ [IA] ${a}`);
-        });
+        llmResult.alertas.forEach(a => { allFindings.push(`ℹ️ [IA] ${a}`); });
       }
 
       let dateFindings: string[] = [];
-      const foundDataInicio = fields.dataInicio || (llmResult?.dataInicio);
-      const foundDataVenc = fields.dataVencimento || (llmResult?.dataVencimento);
-      if (foundDataInicio) dateFindings.push(`📅 Data de início identificada`);
-      else dateFindings.push(`❓ Data de início não encontrada no texto`);
+      if (fields.dataInicio || llmResult?.dataInicio) dateFindings.push(`📅 Data de início identificada`);
+      else dateFindings.push(`❓ Data de início não encontrada`);
+      if (fields.dataVencimento || llmResult?.dataVencimento) dateFindings.push(`📅 Data de vencimento identificada`);
+      else dateFindings.push(`❓ Data de vencimento não encontrada`);
 
-      if (foundDataVenc) dateFindings.push(`📅 Data de vencimento identificada`);
-      else dateFindings.push(`❓ Data de vencimento não encontrada no texto`);
+      setAnalysisResult({ hasAbusiveClauses: hasAbusive, missingSignature: analysis.missingSignature, findings: [...allFindings, ...dateFindings], autoFilled });
+      toast({ title: "✅ Análise concluída", description: autoFilled ? "Campos preenchidos automaticamente." : "Documento analisado." });
 
-      setAnalysisResult({
-        hasAbusiveClauses: hasAbusive,
-        missingSignature: analysis.missingSignature,
-        findings: [...allFindings, ...dateFindings],
-        autoFilled,
-      });
+      if (hasAbusive) addAlerta({ tipo: 'clausula_abusiva', mensagem: `Cláusula(s) abusiva(s) em "${file.name}"`, empresa: empresa || undefined, urgencia: 'alta' });
+      if (analysis.missingSignature) addAlerta({ tipo: 'geral', mensagem: `Assinatura não identificada em "${file.name}"`, empresa: empresa || undefined, urgencia: 'media' });
 
-      toast({
-        title: "✅ Análise concluída",
-        description: autoFilled
-          ? "Os campos do formulário foram preenchidos automaticamente."
-          : "Documento analisado com sucesso."
-      });
-
-      // Generate persistent alerts if critical issues found
-      if (hasAbusive) {
-        addAlerta({
-          tipo: 'clausula_abusiva',
-          mensagem: `Cláusula(s) abusiva(s) detectada(s) no documento "${file.name}"`,
-          empresa: empresa || undefined,
-          urgencia: 'alta',
-        });
-      }
-      if (analysis.missingSignature) {
-        addAlerta({
-          tipo: 'geral',
-          mensagem: `Assinatura não identificada no documento "${file.name}"`,
-          empresa: empresa || undefined,
-          urgencia: 'media',
-        });
-      }
-
-      const analysisSource = llmResult ? 'IA (LLM + local)' : 'IA (local)';
-      addLog(currentUser!.id, currentUser!.nome, 'Análise IA executada', `Arquivo: ${file.name} — ${allFindings.length} achado(s) via ${analysisSource}`);
+      addLog(currentUser!.id, currentUser!.nome, 'Análise IA executada', `Arquivo: ${file.name}`);
     } catch (err) {
       console.warn('Analysis failed:', err);
-      setAnalysisResult({
-        hasAbusiveClauses: false,
-        missingSignature: false,
-        findings: ['⚡ Não foi possível analisar o documento automaticamente'],
-        autoFilled: false,
-      });
+      setAnalysisResult({ hasAbusiveClauses: false, missingSignature: false, findings: ['⚡ Não foi possível analisar automaticamente'], autoFilled: false });
     } finally {
       setAnalysisLoading(false);
     }
-  }, [showForm, numero, empresa, descricao, valor, dataInicio, dataVencimento, addAlerta, addLog, currentUser, appConfig]);
+  }, [showForm, numero, empresa, descricao, valor, dataInicio, dataVencimento, addAlerta, addLog, currentUser, appConfig, contratos]);
+
+  const generateParcelas = (contratoId: string) => {
+    let qtd = 0;
+    let vlrParcela = 0;
+    const inicio = dataInicio;
+
+    if (modeloCobranca === 'ti') {
+      qtd = parseInt(vigenciaMeses) || 0;
+      vlrParcela = parseCurrency(valorManutencaoMensal);
+      // Add implantação as first parcela if exists
+      const impl = parseCurrency(valorImplantacao);
+      const newParcelas: Omit<Parcela, 'id' | 'criadoEm'>[] = [];
+      let parcelaNum = 1;
+      if (impl > 0) {
+        newParcelas.push({
+          idContrato: contratoId, numero: parcelaNum, valor: formatCurrency(impl),
+          dataVencimento: inicio, status: 'pendente', quitado: false,
+        });
+        parcelaNum++;
+      }
+      for (let i = 0; i < qtd; i++) {
+        newParcelas.push({
+          idContrato: contratoId, numero: parcelaNum + i,
+          valor: formatCurrency(vlrParcela),
+          dataVencimento: addMonths(inicio, i + 1),
+          status: 'pendente', quitado: false,
+        });
+      }
+      if (newParcelas.length > 0) addParcelas(newParcelas);
+    } else {
+      qtd = parseInt(qtdPagamentos) || 0;
+      vlrParcela = parseCurrency(valorPrestacao);
+      if (qtd > 0 && vlrParcela > 0) {
+        const newParcelas: Omit<Parcela, 'id' | 'criadoEm'>[] = [];
+        for (let i = 0; i < qtd; i++) {
+          newParcelas.push({
+            idContrato: contratoId, numero: i + 1,
+            valor: formatCurrency(vlrParcela),
+            dataVencimento: addMonths(inicio, i + 1),
+            status: 'pendente', quitado: false,
+          });
+        }
+        addParcelas(newParcelas);
+      }
+    }
+  };
 
   const handleSave = () => {
     setError(null);
@@ -375,7 +415,6 @@ export default function Contratos() {
       return;
     }
 
-    // Obra fields — convert string inputs to their proper types
     const obraFields = tipo === 'Obra' ? {
       qtdMedicoes: qtdMedicoes ? parseInt(qtdMedicoes, 10) : undefined,
       medicaoAtual: medicaoAtual ? parseInt(medicaoAtual, 10) : undefined,
@@ -383,26 +422,34 @@ export default function Contratos() {
       saldoContrato: saldoContrato.trim() || undefined,
     } : { qtdMedicoes: undefined, medicaoAtual: undefined, valorMedicao: undefined, saldoContrato: undefined };
 
-    const mvFields = {
-      integradoMv,
-      idMv: idMv.trim() || undefined,
+    const financialFields = {
+      vigenciaMeses: vigenciaMeses ? parseInt(vigenciaMeses) : undefined,
+      modeloCobranca: modeloCobranca,
+      valorImplantacao: valorImplantacao.trim() || undefined,
+      valorManutencaoMensal: valorManutencaoMensal.trim() || undefined,
+      qtdPagamentos: qtdPagamentos ? parseInt(qtdPagamentos) : undefined,
+      valorPrestacao: valorPrestacao.trim() || undefined,
     };
 
     if (editingId) {
       updateContrato(editingId, {
         numero: numero.trim(), descricao: descricao.trim(), empresa: empresa.trim(),
-        objeto: objeto.trim() || descricao.trim(), tipo, idSetor, valor, status: statusContrato,
-        dataInicio: isoToBr(dataInicio), dataVencimento: isoToBr(dataVencimento), arquivoPdf, nomeArquivo,
-        ...obraFields, ...mvFields,
+        objeto: objeto.trim() || descricao.trim(), tipo, idSetor, valor, status: statusContrato as any,
+        dataInicio: isoToBr(dataInicio), dataVencimento: isoToBr(dataVencimento),
+        arquivoPdf, nomeArquivo,
+        ...obraFields, ...financialFields,
       });
       addLog(currentUser!.id, currentUser!.nome, 'Contrato editado', `Contrato: ${numero.trim()}`);
     } else {
-      addContrato({
+      const novoContrato = addContrato({
         numero: numero.trim(), descricao: descricao.trim(), empresa: empresa.trim(),
-        objeto: objeto.trim() || descricao.trim(), tipo, idSetor, valor, status: statusContrato,
-        dataInicio: isoToBr(dataInicio), dataVencimento: isoToBr(dataVencimento), criadoPor: currentUser!.id, arquivoPdf, nomeArquivo,
-        ...obraFields, ...mvFields,
+        objeto: objeto.trim() || descricao.trim(), tipo, idSetor, valor, status: statusContrato as any,
+        dataInicio: isoToBr(dataInicio), dataVencimento: isoToBr(dataVencimento),
+        criadoPor: currentUser!.id, arquivoPdf, nomeArquivo,
+        ...obraFields, ...financialFields,
       });
+      // Generate parcelas for new contract
+      generateParcelas(novoContrato.id);
       addLog(currentUser!.id, currentUser!.nome, 'Contrato criado', `Contrato: ${numero.trim()}`);
     }
     resetForm();
@@ -410,21 +457,13 @@ export default function Contratos() {
 
   const handleDelete = (c: typeof contratos[0]) => {
     if (!isAdmin) return;
-    if (!confirm(`Deseja excluir o contrato "${c.numero}"? Ele será mantido no registro para auditoria.`)) return;
+    if (!confirm(`Deseja excluir o contrato "${c.numero}"?`)) return;
     deleteContrato(c.id, currentUser!.id);
-    addLog(currentUser!.id, currentUser!.nome, 'Contrato excluído', `Contrato: ${c.numero} (soft-delete para auditoria)`);
+    addLog(currentUser!.id, currentUser!.nome, 'Contrato excluído', `Contrato: ${c.numero}`);
   };
 
   const handleView = (c: typeof contratos[0]) => {
-    setViewerData({
-      pdf: c.arquivoPdf,
-      nome: c.nomeArquivo,
-      numero: c.numero,
-      objeto: c.objeto,
-      empresa: c.empresa,
-      status: c.status,
-      vencimento: c.dataVencimento
-    });
+    setViewerData({ pdf: c.arquivoPdf, nome: c.nomeArquivo, numero: c.numero, objeto: c.objeto, empresa: c.empresa, status: c.status, vencimento: c.dataVencimento });
     setViewerOpen(true);
   };
 
@@ -440,35 +479,21 @@ export default function Contratos() {
 
   const handleSendToIA = async (c: typeof contratos[0]) => {
     setSendingWebhook(c.id);
-    const payload = {
-      contratoId: c.id,
-      numero: c.numero,
-      descricao: c.descricao,
-      empresa: c.empresa,
-      objeto: c.objeto,
-      tipo: c.tipo,
-      valor: c.valor,
-      status: c.status,
-      dataInicio: c.dataInicio,
-      dataVencimento: c.dataVencimento,
-      temPdf: !!c.arquivoPdf,
-    };
+    const payload = { contratoId: c.id, numero: c.numero, descricao: c.descricao, empresa: c.empresa, objeto: c.objeto, tipo: c.tipo, valor: c.valor, status: c.status, dataInicio: c.dataInicio, dataVencimento: c.dataVencimento, temPdf: !!c.arquivoPdf };
     const result = await enviarWebhook('gptmaker', payload);
     if (result.ok) {
       addLog(currentUser!.id, currentUser!.nome, 'Contrato enviado para IA', `Contrato: ${c.numero}`);
-      addAlerta({
-        tipo: 'analise_ia',
-        mensagem: `Contrato ${c.numero} enviado para análise da IA`,
-        idContrato: c.id,
-        numeroContrato: c.numero,
-        empresa: c.empresa,
-        urgencia: 'media',
-      });
+      addAlerta({ tipo: 'analise_ia', mensagem: `Contrato ${c.numero} enviado para análise da IA`, idContrato: c.id, numeroContrato: c.numero, empresa: c.empresa, urgencia: 'media' });
     } else {
-      addLog(currentUser!.id, currentUser!.nome, 'Falha ao enviar para IA', `Contrato: ${c.numero} — ${result.error}`);
       setError(result.error || 'Erro ao enviar para IA');
     }
     setSendingWebhook(null);
+  };
+
+  const handleToggleParcelaStatus = (parcela: Parcela) => {
+    const newStatus = parcela.status === 'pendente' ? 'pago' : 'pendente';
+    updateParcela(parcela.id, { status: newStatus, quitado: newStatus === 'pago' });
+    addLog(currentUser!.id, currentUser!.nome, 'Parcela atualizada', `Parcela ${parcela.numero} → ${newStatus}`);
   };
 
   return (
@@ -480,10 +505,7 @@ export default function Contratos() {
             {isAdmin ? "Gerencie todos os contratos da instituição" : `Contratos do setor: ${getSetorNome(currentUser?.idSetor || '')}`}
           </p>
         </div>
-        <button
-          onClick={handleNew}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity accent-glow"
-        >
+        <button onClick={handleNew} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity accent-glow">
           <Plus className="w-4 h-4" /> Novo Contrato
         </button>
       </div>
@@ -491,12 +513,7 @@ export default function Contratos() {
       {/* Global error */}
       <AnimatePresence>
         {error && !showForm && (
-          <motion.div
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm"
-          >
+          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
             <AlertCircle className="w-4 h-4 flex-shrink-0" /> {error}
             <button onClick={() => setError(null)} className="ml-auto p-1 rounded hover:bg-destructive/10"><X className="w-3 h-3" /></button>
           </motion.div>
@@ -506,20 +523,11 @@ export default function Contratos() {
       {/* Form */}
       <AnimatePresence>
         {showForm && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="bg-card rounded-xl border border-border p-6 space-y-4"
-            style={{ boxShadow: "var(--shadow-md)" }}
-          >
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+            className="bg-card rounded-xl border border-border p-6 space-y-4" style={{ boxShadow: "var(--shadow-md)" }}>
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-foreground">
-                {editingId ? "Editar Contrato" : "Novo Contrato"}
-              </h3>
-              <button onClick={resetForm} className="p-1 rounded hover:bg-secondary transition-colors">
-                <X className="w-4 h-4 text-muted-foreground" />
-              </button>
+              <h3 className="text-lg font-semibold text-foreground">{editingId ? "Editar Contrato" : "Novo Contrato"}</h3>
+              <button onClick={resetForm} className="p-1 rounded hover:bg-secondary transition-colors"><X className="w-4 h-4 text-muted-foreground" /></button>
             </div>
 
             {error && (
@@ -528,6 +536,7 @@ export default function Contratos() {
               </div>
             )}
 
+            {/* Basic fields */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground">Nº Contrato *</label>
@@ -540,13 +549,10 @@ export default function Contratos() {
                   className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring" />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Tipo</label>
-                <select value={tipo} onChange={(e) => setTipo(e.target.value)}
+                <label className="text-xs font-medium text-muted-foreground">Tipo de Contrato *</label>
+                <select value={tipo} onChange={(e) => handleTipoChange(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring">
-                  <option>Serviço</option>
-                  <option>Fornecimento</option>
-                  <option>Obra</option>
-                  <option>Consultoria</option>
+                  {TIPOS_CONTRATO.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
               <div className="space-y-1.5 md:col-span-2 lg:col-span-3">
@@ -563,56 +569,108 @@ export default function Contratos() {
                 </select>
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Valor</label>
-                <input value={valor} onChange={(e) => setValor(e.target.value)} placeholder="R$ 0,00"
-                  className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring" />
-              </div>
-              <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground">Status</label>
-                <select value={statusContrato} onChange={(e) => setStatusContrato(e.target.value as typeof statusContrato)}
+                <select value={statusContrato} onChange={(e) => setStatusContrato(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring">
                   <option>Vigente</option>
                   <option>Vencendo</option>
                   <option>Vencido</option>
                   <option>Encerrado</option>
+                  <option>Quitado</option>
+                  <option>Em Aberto</option>
                 </select>
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Data Início</label>
+                <label className="text-xs font-medium text-muted-foreground">Data de Assinatura</label>
                 <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring" />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Data Vencimento</label>
+                <label className="text-xs font-medium text-muted-foreground">Vigência (meses)</label>
+                <input type="number" min="1" value={vigenciaMeses} onChange={(e) => setVigenciaMeses(e.target.value)}
+                  placeholder="Ex: 12"
+                  className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Data de Vencimento {vigenciaMeses && dataInicio ? "(calculada)" : ""}</label>
                 <input type="date" value={dataVencimento} onChange={(e) => setDataVencimento(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring" />
               </div>
 
               {/* PDF Upload */}
-              <div className="space-y-1.5 lg:col-span-1">
+              <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground">Arquivo PDF</label>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".pdf,.docx,.doc"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
+                <input ref={fileInputRef} type="file" accept=".pdf,.docx,.doc" onChange={handleFileUpload} className="hidden" />
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-input bg-background text-sm text-muted-foreground hover:bg-secondary transition-colors"
-                  >
+                  <button type="button" onClick={() => fileInputRef.current?.click()}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-input bg-background text-sm text-muted-foreground hover:bg-secondary transition-colors">
                     <Upload className="w-3.5 h-3.5" /> Upload PDF/DOCX
                   </button>
-                  {nomeArquivo && (
-                    <span className="text-xs text-success truncate max-w-[160px]" title={nomeArquivo}>
-                      ✓ {nomeArquivo}
-                    </span>
-                  )}
+                  {nomeArquivo && <span className="text-xs text-success truncate max-w-[160px]" title={nomeArquivo}>✓ {nomeArquivo}</span>}
                 </div>
               </div>
+            </div>
+
+            {/* ── Financial Model ──────────────────────────── */}
+            <div className="border border-border rounded-lg p-4 space-y-3">
+              <div className="flex items-center gap-3">
+                <CreditCard className="w-4 h-4 text-primary" />
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Modelo Financeiro</p>
+                <div className="flex gap-2 ml-auto">
+                  <button type="button" onClick={() => setModeloCobranca('ti')}
+                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${modeloCobranca === 'ti' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}`}>
+                    Prestação de Serviço TI
+                  </button>
+                  <button type="button" onClick={() => setModeloCobranca('geral')}
+                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${modeloCobranca === 'geral' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}`}>
+                    Demais Tipos
+                  </button>
+                </div>
+              </div>
+
+              {modeloCobranca === 'ti' ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">Valor de Implantação</label>
+                    <input value={valorImplantacao} onChange={(e) => setValorImplantacao(e.target.value)} placeholder="R$ 0,00 (opcional)"
+                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">Manutenção Mensal *</label>
+                    <input value={valorManutencaoMensal} onChange={(e) => setValorManutencaoMensal(e.target.value)} placeholder="R$ 0,00"
+                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">Qtd. Pagamentos Mensais</label>
+                    <input type="number" min="1" value={vigenciaMeses} disabled
+                      className="w-full px-3 py-2 rounded-lg border border-input bg-muted text-sm outline-none cursor-not-allowed" />
+                    <p className="text-[10px] text-muted-foreground">Baseado na vigência</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">Valor Total (calculado)</label>
+                    <input value={valor} disabled
+                      className="w-full px-3 py-2 rounded-lg border border-input bg-muted text-sm outline-none font-semibold cursor-not-allowed" />
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">Qtd. Prestações</label>
+                    <input type="number" min="1" value={qtdPagamentos} onChange={(e) => setQtdPagamentos(e.target.value)} placeholder="Ex: 12"
+                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">Valor de Cada Prestação</label>
+                    <input value={valorPrestacao} onChange={(e) => setValorPrestacao(e.target.value)} placeholder="R$ 0,00"
+                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">Valor Total (calculado)</label>
+                    <input value={valor} disabled
+                      className="w-full px-3 py-2 rounded-lg border border-input bg-muted text-sm outline-none font-semibold cursor-not-allowed" />
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* ── Campos de Obra ──────────────────────────────── */}
@@ -622,144 +680,56 @@ export default function Contratos() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-muted-foreground">Qtd. Medições Previstas</label>
-                    <input
-                      type="number" min="0" value={qtdMedicoes}
-                      onChange={(e) => setQtdMedicoes(e.target.value)}
-                      placeholder="Ex: 12"
-                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring"
-                    />
+                    <input type="number" min="0" value={qtdMedicoes} onChange={(e) => setQtdMedicoes(e.target.value)} placeholder="Ex: 12"
+                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring" />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-muted-foreground">Medição Atual (Nº)</label>
-                    <input
-                      type="number" min="0" value={medicaoAtual}
-                      onChange={(e) => setMedicaoAtual(e.target.value)}
-                      placeholder="Ex: 3"
-                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring"
-                    />
+                    <input type="number" min="0" value={medicaoAtual} onChange={(e) => setMedicaoAtual(e.target.value)} placeholder="Ex: 3"
+                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring" />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-muted-foreground">Valor da Medição</label>
-                    <input
-                      value={valorMedicao}
-                      onChange={(e) => setValorMedicao(e.target.value)}
-                      placeholder="R$ 0,00"
-                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring"
-                    />
+                    <input value={valorMedicao} onChange={(e) => setValorMedicao(e.target.value)} placeholder="R$ 0,00"
+                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring" />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-muted-foreground">Saldo do Contrato</label>
-                    <input
-                      value={saldoContrato}
-                      onChange={(e) => setSaldoContrato(e.target.value)}
-                      placeholder="R$ 0,00"
-                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring"
-                    />
+                    <input value={saldoContrato} onChange={(e) => setSaldoContrato(e.target.value)} placeholder="R$ 0,00"
+                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring" />
                   </div>
                 </div>
               </div>
             )}
 
-            {/* ── Integração Sistema MV ────────────────────────── */}
-            <div className="border border-border rounded-lg p-4 space-y-3">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Integração Sistema MV</p>
-              <div className="flex flex-wrap items-center gap-6">
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={integradoMv}
-                    onChange={(e) => setIntegradoMv(e.target.checked)}
-                    className="w-4 h-4 accent-primary rounded"
-                  />
-                  <span className="text-sm text-foreground">Sincronizado com o Sistema MV</span>
-                </label>
-                {integradoMv && (
-                  <div className="flex items-center gap-2 flex-1 min-w-[220px]">
-                    <label className="text-xs font-medium text-muted-foreground whitespace-nowrap">ID no MV</label>
-                    <input
-                      value={idMv}
-                      onChange={(e) => setIdMv(e.target.value)}
-                      placeholder="Identificador no Sistema MV"
-                      className="flex-1 px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring"
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* AI Breakdown Panel — shown only after a successful analysis */}
+            {/* AI Breakdown Panel */}
             <AnimatePresence>
               {aiBreakdown && (aiBreakdown.breakdownValor || aiBreakdown.vigenciaTexto || aiBreakdown.valorImplantacao || aiBreakdown.valorMensalidade) && (
-                <motion.div
-                  initial={{ opacity: 0, y: -6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-3 text-sm"
-                >
+                <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
+                  className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-3 text-sm">
                   <p className="text-xs font-semibold text-primary uppercase tracking-wide">Detalhamento identificado pela IA</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {/* Value breakdown */}
                     {(aiBreakdown.valorImplantacao || aiBreakdown.valorMensalidade || aiBreakdown.breakdownValor) && (
                       <div className="space-y-1.5">
-                        <p className="text-xs font-medium text-muted-foreground">Composição do Valor Total</p>
-                        {aiBreakdown.valorImplantacao && (
-                          <p className="text-foreground">
-                            <span className="text-muted-foreground">Implantação:</span>{' '}
-                            <span className="font-medium">{aiBreakdown.valorImplantacao}</span>
-                          </p>
-                        )}
-                        {aiBreakdown.valorMensalidade && aiBreakdown.vigenciaMeses && (
-                          <p className="text-foreground">
-                            <span className="text-muted-foreground">Mensalidade:</span>{' '}
-                            <span className="font-medium">{aiBreakdown.valorMensalidade}</span>
-                            <span className="text-muted-foreground"> × {aiBreakdown.vigenciaMeses} meses</span>
-                          </p>
-                        )}
-                        {aiBreakdown.valorMensalidade && !aiBreakdown.vigenciaMeses && (
-                          <p className="text-foreground">
-                            <span className="text-muted-foreground">Mensalidade:</span>{' '}
-                            <span className="font-medium">{aiBreakdown.valorMensalidade}</span>
-                          </p>
-                        )}
-                        {aiBreakdown.breakdownValor && (
-                          <p className="text-xs text-muted-foreground italic">{aiBreakdown.breakdownValor}</p>
-                        )}
+                        <p className="text-xs font-medium text-muted-foreground">Composição do Valor</p>
+                        {aiBreakdown.valorImplantacao && <p className="text-foreground"><span className="text-muted-foreground">Implantação:</span> <span className="font-medium">{aiBreakdown.valorImplantacao}</span></p>}
+                        {aiBreakdown.valorMensalidade && <p className="text-foreground"><span className="text-muted-foreground">Mensalidade:</span> <span className="font-medium">{aiBreakdown.valorMensalidade}</span></p>}
+                        {aiBreakdown.breakdownValor && <p className="text-xs text-muted-foreground italic">{aiBreakdown.breakdownValor}</p>}
                       </div>
                     )}
-                    {/* Date breakdown */}
                     {aiBreakdown.vigenciaTexto && (
                       <div className="space-y-1.5">
-                        <p className="text-xs font-medium text-muted-foreground">Vigência e Datas</p>
-                        {dataInicio && (
-                          <p className="text-foreground">
-                            <span className="text-muted-foreground">Data do contrato:</span>{' '}
-                            <span className="font-medium">{isoToBr(dataInicio)}</span>
-                          </p>
-                        )}
-                        <p className="text-foreground">
-                          <span className="text-muted-foreground">Vigência:</span>{' '}
-                          <span className="font-medium">{aiBreakdown.vigenciaTexto}</span>
-                        </p>
-                        {dataVencimento && (
-                          <p className="text-foreground">
-                            <span className="text-muted-foreground">Vencimento calculado:</span>{' '}
-                            <span className="font-medium">{isoToBr(dataVencimento)}</span>
-                          </p>
-                        )}
+                        <p className="text-xs font-medium text-muted-foreground">Vigência</p>
+                        <p className="text-foreground"><span className="font-medium">{aiBreakdown.vigenciaTexto}</span></p>
                       </div>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Os campos do formulário foram preenchidos automaticamente. Revise e ajuste se necessário antes de salvar.
-                  </p>
                 </motion.div>
               )}
             </AnimatePresence>
 
             <div className="flex justify-end gap-3">
-              <button onClick={resetForm} className="px-4 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:bg-secondary transition-colors">
-                Cancelar
-              </button>
+              <button onClick={resetForm} className="px-4 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:bg-secondary transition-colors">Cancelar</button>
               <button onClick={handleSave} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
                 {editingId ? "Salvar Alterações" : "Criar Contrato"}
               </button>
@@ -772,23 +742,26 @@ export default function Contratos() {
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="flex items-center gap-2 bg-card border border-border rounded-lg px-3 py-2 flex-1 max-w-md" style={{ boxShadow: "var(--shadow-sm)" }}>
           <Search className="w-4 h-4 text-muted-foreground" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por nº, empresa ou objeto..."
-            className="bg-transparent text-sm outline-none w-full placeholder:text-muted-foreground"
-          />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nº, empresa ou objeto..."
+            className="bg-transparent text-sm outline-none w-full placeholder:text-muted-foreground" />
         </div>
         {isAdmin && (
-          <select
-            value={filterSetor}
-            onChange={(e) => setFilterSetor(e.target.value)}
-            className="px-3 py-2 rounded-lg border border-border bg-card text-sm text-muted-foreground"
-          >
+          <select value={filterSetor} onChange={(e) => setFilterSetor(e.target.value)}
+            className="px-3 py-2 rounded-lg border border-border bg-card text-sm text-muted-foreground">
             <option value="">Todos os setores</option>
             {setores.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
           </select>
         )}
+        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
+          className="px-3 py-2 rounded-lg border border-border bg-card text-sm text-muted-foreground">
+          <option value="">Todos os status</option>
+          <option>Vigente</option>
+          <option>Vencendo</option>
+          <option>Vencido</option>
+          <option>Encerrado</option>
+          <option>Quitado</option>
+          <option>Em Aberto</option>
+        </select>
       </div>
 
       {/* Table */}
@@ -809,58 +782,88 @@ export default function Contratos() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((c) => (
-                <tr key={c.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
-                  <td className="px-5 py-3.5 font-medium text-foreground">
-                    <div className="flex items-center gap-2">
-                      <FileText className={`w-4 h-4 ${c.arquivoPdf ? 'text-primary' : 'text-muted-foreground'}`} />
-                      {c.numero}
-                    </div>
-                  </td>
-                  <td className="px-5 py-3.5 text-foreground">{c.empresa}</td>
-                  <td className="px-5 py-3.5 text-muted-foreground hidden lg:table-cell max-w-[200px] truncate">{c.objeto}</td>
-                  <td className="px-5 py-3.5 text-muted-foreground">{c.tipo}</td>
-                  <td className="px-5 py-3.5 text-muted-foreground hidden md:table-cell">{getSetorNome(c.idSetor)}</td>
-                  <td className="px-5 py-3.5 font-medium text-foreground hidden md:table-cell">{c.valor}</td>
-                  <td className="px-5 py-3.5">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusStyle[c.status]}`}>{c.status}</span>
-                  </td>
-                  <td className="px-5 py-3.5 text-muted-foreground hidden md:table-cell">
-                    <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {c.dataVencimento}</span>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <div className="flex items-center gap-0.5">
-                      <button onClick={() => handleView(c)} className="p-1.5 rounded-md hover:bg-secondary transition-colors" title="Visualizar">
-                        <Eye className="w-4 h-4 text-muted-foreground" />
-                      </button>
-                      {c.arquivoPdf && (
-                        <button onClick={() => handleDownload(c)} className="p-1.5 rounded-md hover:bg-secondary transition-colors" title="Baixar PDF">
-                          <Download className="w-4 h-4 text-muted-foreground" />
-                        </button>
-                      )}
-                      <button onClick={() => handleEdit(c)} className="p-1.5 rounded-md hover:bg-secondary transition-colors" title="Editar">
-                        <Pencil className="w-4 h-4 text-muted-foreground" />
-                      </button>
-                      {isAdmin && (
-                        <button onClick={() => handleDelete(c)} className="p-1.5 rounded-md hover:bg-destructive/10 transition-colors" title="Excluir">
-                          <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
-                        </button>
-                      )}
-                      <button
-                        onClick={() => handleSendToIA(c)}
-                        disabled={sendingWebhook === c.id}
-                        className="p-1.5 rounded-md hover:bg-accent/10 transition-colors disabled:opacity-50"
-                        title="Enviar para análise IA"
-                      >
-                        {sendingWebhook === c.id
-                          ? <Loader2 className="w-4 h-4 text-accent animate-spin" />
-                          : <Send className="w-4 h-4 text-accent" />
-                        }
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {filtered.map((c) => {
+                const contratoParcelas = getParcelasContrato(c.id);
+                return (
+                  <React.Fragment key={c.id}>
+                    <tr className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                      <td className="px-5 py-3.5 font-medium text-foreground">
+                        <div className="flex items-center gap-2">
+                          <FileText className={`w-4 h-4 ${c.arquivoPdf ? 'text-primary' : 'text-muted-foreground'}`} />
+                          {c.numero}
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5 text-foreground">{c.empresa}</td>
+                      <td className="px-5 py-3.5 text-muted-foreground hidden lg:table-cell max-w-[200px] truncate">{c.objeto}</td>
+                      <td className="px-5 py-3.5 text-muted-foreground">{c.tipo}</td>
+                      <td className="px-5 py-3.5 text-muted-foreground hidden md:table-cell">{getSetorNome(c.idSetor)}</td>
+                      <td className="px-5 py-3.5 font-medium text-foreground hidden md:table-cell">{c.valor}</td>
+                      <td className="px-5 py-3.5">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusStyle[c.status] || ''}`}>{c.status}</span>
+                      </td>
+                      <td className="px-5 py-3.5 text-muted-foreground hidden md:table-cell">
+                        <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {c.dataVencimento}</span>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-0.5">
+                          <button onClick={() => handleView(c)} className="p-1.5 rounded-md hover:bg-secondary transition-colors" title="Visualizar">
+                            <Eye className="w-4 h-4 text-muted-foreground" />
+                          </button>
+                          {c.arquivoPdf && (
+                            <button onClick={() => handleDownload(c)} className="p-1.5 rounded-md hover:bg-secondary transition-colors" title="Baixar PDF">
+                              <Download className="w-4 h-4 text-muted-foreground" />
+                            </button>
+                          )}
+                          {contratoParcelas.length > 0 && (
+                            <button onClick={() => setParcelasViewId(parcelasViewId === c.id ? null : c.id)}
+                              className="p-1.5 rounded-md hover:bg-secondary transition-colors" title="Ver Parcelas">
+                              <CreditCard className={`w-4 h-4 ${parcelasViewId === c.id ? 'text-primary' : 'text-muted-foreground'}`} />
+                            </button>
+                          )}
+                          <button onClick={() => handleEdit(c)} className="p-1.5 rounded-md hover:bg-secondary transition-colors" title="Editar">
+                            <Pencil className="w-4 h-4 text-muted-foreground" />
+                          </button>
+                          {isAdmin && (
+                            <button onClick={() => handleDelete(c)} className="p-1.5 rounded-md hover:bg-destructive/10 transition-colors" title="Excluir">
+                              <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
+                            </button>
+                          )}
+                          <button onClick={() => handleSendToIA(c)} disabled={sendingWebhook === c.id}
+                            className="p-1.5 rounded-md hover:bg-accent/10 transition-colors disabled:opacity-50" title="Enviar para IA">
+                            {sendingWebhook === c.id ? <Loader2 className="w-4 h-4 text-accent animate-spin" /> : <Send className="w-4 h-4 text-accent" />}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    {/* Parcelas expandable row */}
+                    {parcelasViewId === c.id && contratoParcelas.length > 0 && (
+                      <tr>
+                        <td colSpan={9} className="px-5 py-3 bg-muted/10">
+                          <div className="space-y-2">
+                            <p className="text-xs font-semibold text-muted-foreground uppercase">Parcelas ({contratoParcelas.filter(p => p.status === 'pago').length}/{contratoParcelas.length} pagas)</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                              {contratoParcelas.map(p => (
+                                <div key={p.id} className={`flex items-center justify-between px-3 py-2 rounded-lg border text-xs ${p.status === 'pago' ? 'bg-success/5 border-success/20' : 'bg-card border-border'}`}>
+                                  <div>
+                                    <span className="font-medium">#{p.numero}</span>
+                                    <span className="text-muted-foreground ml-2">{p.valor}</span>
+                                    <span className="text-muted-foreground ml-2">{p.dataVencimento}</span>
+                                  </div>
+                                  <button onClick={() => handleToggleParcelaStatus(p)}
+                                    className={`p-1 rounded transition-colors ${p.status === 'pago' ? 'text-success hover:bg-success/10' : 'text-muted-foreground hover:bg-secondary'}`}
+                                    title={p.status === 'pago' ? 'Marcar como pendente' : 'Marcar como pago'}>
+                                    <CheckCircle2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -870,24 +873,11 @@ export default function Contratos() {
       </div>
 
       {/* PDF Viewer Modal */}
-      <ContratoViewer
-        open={viewerOpen}
-        onClose={() => setViewerOpen(false)}
-        arquivoPdf={viewerData.pdf}
-        nomeArquivo={viewerData.nome}
-        numeroContrato={viewerData.numero}
-        objeto={viewerData.objeto}
-        empresa={viewerData.empresa}
-        status={viewerData.status}
-        vencimento={viewerData.vencimento}
-      />
+      <ContratoViewer open={viewerOpen} onClose={() => setViewerOpen(false)} arquivoPdf={viewerData.pdf} nomeArquivo={viewerData.nome}
+        numeroContrato={viewerData.numero} objeto={viewerData.objeto} empresa={viewerData.empresa} status={viewerData.status} vencimento={viewerData.vencimento} />
 
       {/* AI Analysis Alert */}
-      <AnalysisAlert
-        result={analysisResult}
-        loading={analysisLoading}
-        onClose={() => { setAnalysisResult(null); setAnalysisLoading(false); }}
-      />
+      <AnalysisAlert result={analysisResult} loading={analysisLoading} onClose={() => { setAnalysisResult(null); setAnalysisLoading(false); }} />
     </motion.div>
   );
 }
