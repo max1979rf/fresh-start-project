@@ -103,16 +103,8 @@ function mapContratoFromDB(row: Record<string, unknown>): Contrato {
         excluidoEm: (row.excluido_em as string) ?? undefined,
         // Vigência
         vigenciaMeses: row.vigencia_meses != null ? Number(row.vigencia_meses) : undefined,
-        // Modelo financeiro
-        modeloCobranca: (row.modelo_cobranca as Contrato['modeloCobranca']) ?? undefined,
-        valorImplantacao: (row.valor_implantacao as string) ?? undefined,
-        valorManutencaoMensal: (row.valor_manutencao_mensal as string) ?? undefined,
-        qtdPagamentos: row.qtd_pagamentos != null ? Number(row.qtd_pagamentos) : undefined,
-        valorPrestacao: (row.valor_prestacao as string) ?? undefined,
-        // Obra fields
-        qtdMedicoes: row.qtd_medicoes != null ? Number(row.qtd_medicoes) : undefined,
-        medicaoAtual: row.medicao_atual != null ? Number(row.medicao_atual) : undefined,
-        valorMedicao: (row.valor_medicao as string) ?? undefined,
+        // Modelo financeiro (kept in local state only, not in DB)
+        // Obra fields (kept in local state only, not in DB)
         saldoContrato: (row.saldo_contrato as string) ?? undefined,
     };
 }
@@ -322,7 +314,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             criado_por: c.criadoPor, criado_em: c.criadoEm,
             excluido: false,
             vigencia_meses: c.vigenciaMeses ?? null,
-            modelo_cobranca: c.modeloCobranca ?? null,
         })));
         await supabase.from('clientes').insert(SEED_CLIENTES.map(c => ({
             id: c.id, nome_fantasia: c.nomeFantasia, razao_social: c.razaoSocial,
@@ -657,16 +648,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             arquivo_pdf: novo.arquivoPdf ?? null, nome_arquivo: novo.nomeArquivo ?? null,
             excluido: false,
             vigencia_meses: novo.vigenciaMeses ?? null,
-            modelo_cobranca: novo.modeloCobranca ?? null,
-            valor_implantacao: novo.valorImplantacao ?? null,
-            valor_manutencao_mensal: novo.valorManutencaoMensal ?? null,
-            qtd_pagamentos: novo.qtdPagamentos ?? null,
-            valor_prestacao: novo.valorPrestacao ?? null,
-            // Obra fields
-            qtd_medicoes: novo.qtdMedicoes ?? null,
-            medicao_atual: novo.medicaoAtual ?? null,
-            valor_medicao: novo.valorMedicao ?? null,
-            saldo_contrato: novo.saldoContrato ?? null,
         }).then(({ error }) => {
             if (error) {
                 console.error('Failed to save contrato:', error);
@@ -699,16 +680,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         if (data.excluidoPor !== undefined) dbUpdate.excluido_por = data.excluidoPor;
         if (data.excluidoEm !== undefined) dbUpdate.excluido_em = data.excluidoEm;
         if (data.vigenciaMeses !== undefined) dbUpdate.vigencia_meses = data.vigenciaMeses ?? null;
-        if (data.modeloCobranca !== undefined) dbUpdate.modelo_cobranca = data.modeloCobranca ?? null;
-        if (data.valorImplantacao !== undefined) dbUpdate.valor_implantacao = data.valorImplantacao ?? null;
-        if (data.valorManutencaoMensal !== undefined) dbUpdate.valor_manutencao_mensal = data.valorManutencaoMensal ?? null;
-        if (data.qtdPagamentos !== undefined) dbUpdate.qtd_pagamentos = data.qtdPagamentos ?? null;
-        if (data.valorPrestacao !== undefined) dbUpdate.valor_prestacao = data.valorPrestacao ?? null;
-        // Obra fields
-        if (data.qtdMedicoes !== undefined) dbUpdate.qtd_medicoes = data.qtdMedicoes ?? null;
-        if (data.medicaoAtual !== undefined) dbUpdate.medicao_atual = data.medicaoAtual ?? null;
-        if (data.valorMedicao !== undefined) dbUpdate.valor_medicao = data.valorMedicao ?? null;
-        if (data.saldoContrato !== undefined) dbUpdate.saldo_contrato = data.saldoContrato ?? null;
+        // Financial/obra fields are kept in local state only (columns don't exist in DB)
         supabase.from('contratos').update(dbUpdate).eq('id', id).then(({ error }) => {
             if (error) console.error('Failed to update contrato:', error);
         });
