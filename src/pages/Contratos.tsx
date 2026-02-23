@@ -341,8 +341,8 @@ export default function Contratos() {
       })();
 
       if (llmResult) {
-        // Preencher empresa: priorizar contratante, depois contratada, depois genérico
-        const llmEmpresa = llmResult.empresaContratante || llmResult.empresaContratada || llmResult.empresa;
+        // Preencher empresa: priorizar contratada (quem presta o serviço), depois contratante, depois genérico
+        const llmEmpresa = llmResult.empresaContratada || llmResult.empresaContratante || llmResult.empresa;
         if (llmEmpresa) { setEmpresa(llmEmpresa); autoFilled = true; }
         const llmDescr = llmResult.nomeContrato || llmResult.descricaoObjeto;
         if (llmDescr) { setDescricao(llmDescr); autoFilled = true; }
