@@ -266,7 +266,7 @@ export default function Contratos() {
     const isDocx = file.name.toLowerCase().endsWith('.docx') || file.name.toLowerCase().endsWith('.doc') || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
     if (!isPdf && !isDocx) { setError('Apenas arquivos PDF ou DOCX são permitidos.'); return; }
-    if (file.size > 10 * 1024 * 1024) { setError('Arquivo muito grande. Limite de 10MB.'); return; }
+    if (file.size > 200 * 1024 * 1024) { setError('Arquivo muito grande. Limite de 200MB.'); return; }
 
     const dataUri = await new Promise<string>((resolve) => {
       const reader = new FileReader();
