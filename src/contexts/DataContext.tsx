@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import type { Setor, User, Contrato, LogEntry, Alerta, AppConfig, ModeloContrato, Cliente, Empresa } from '../types';
 import { supabase } from '@/integrations/supabase/client';
 import { saveConfiguracoes, loadConfiguracoes } from '@/services/configService';
+import { brToIso } from '@/utils/dateUtils';
 
 // --- Simple hash for passwords (sync, deterministic) ---
 function simpleHash(str: string): string {
@@ -301,7 +302,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         await supabase.from('contratos').insert(SEED_CONTRATOS.map(c => ({
             id: c.id, numero: c.numero, descricao: c.descricao, empresa: c.empresa,
             objeto: c.objeto, tipo: c.tipo, id_setor: c.idSetor, valor: c.valor,
-            status: c.status, data_inicio: c.dataInicio, data_vencimento: c.dataVencimento,
+            status: c.status, data_inicio: brToIso(c.dataInicio), data_vencimento: brToIso(c.dataVencimento),
             criado_por: c.criadoPor, criado_em: c.criadoEm,
             excluido: false,
         })));
@@ -637,8 +638,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             id_setor: novo.idSetor,
             valor: novo.valor,
             status: novo.status,
-            data_inicio: novo.dataInicio || null,
-            data_vencimento: novo.dataVencimento || null,
+            data_inicio: brToIso(novo.dataInicio) || new Date().toISOString().split('T')[0],
+            data_vencimento: brToIso(novo.dataVencimento) || new Date().toISOString().split('T')[0],
             criado_por: novo.criadoPor,
             criado_em: novo.criadoEm,
             arquivo_pdf: novo.arquivoPdf ?? null,
@@ -672,8 +673,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         if (data.idSetor !== undefined) dbUpdate.id_setor = data.idSetor;
         if (data.valor !== undefined) dbUpdate.valor = data.valor;
         if (data.status !== undefined) dbUpdate.status = data.status;
-        if (data.dataInicio !== undefined) dbUpdate.data_inicio = data.dataInicio || null;
-        if (data.dataVencimento !== undefined) dbUpdate.data_vencimento = data.dataVencimento || null;
+        if (data.dataInicio !== undefined) dbUpdate.data_inicio = brToIso(data.dataInicio) || new Date().toISOString().split('T')[0];
+        if (data.dataVencimento !== undefined) dbUpdate.data_vencimento = brToIso(data.dataVencimento) || new Date().toISOString().split('T')[0];
         if (data.criadoPor !== undefined) dbUpdate.criado_por = data.criadoPor;
         if (data.arquivoPdf !== undefined) dbUpdate.arquivo_pdf = data.arquivoPdf;
         if (data.nomeArquivo !== undefined) dbUpdate.nome_arquivo = data.nomeArquivo;
