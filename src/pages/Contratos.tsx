@@ -11,7 +11,7 @@ import { analyzeContractWithLlm } from "../utils/llmService";
 import { brToIso, isoToBr } from "../utils/dateUtils";
 import type { TipoContrato, ModeloCobranca, Parcela } from "../types";
 
-const TIPOS_CONTRATO: TipoContrato[] = ['Serviços de TI', 'Sistema / Software', 'Infraestrutura', 'Implantação', 'Manutenção', 'Obra', 'Outros'];
+const TIPOS_CONTRATO_DEFAULT: string[] = ['Serviços de TI', 'Sistema / Software', 'Infraestrutura', 'Implantação', 'Manutenção', 'Obra', 'Outros'];
 
 // Map tipo -> setor suggestion
 const TIPO_SETOR_MAP: Record<string, string> = {
@@ -55,7 +55,7 @@ function addMonths(dateStr: string, months: number): string {
 // ─── Component ──────────────────────────────────────────────────
 
 export default function Contratos() {
-  const { contratos, addContrato, updateContrato, deleteContrato, setores, getSetorNome, addLog, enviarWebhook, addAlerta, appConfig, parcelas, addParcelas, updateParcela, deleteParcela, getParcelasContrato } = useData();
+  const { contratos, addContrato, updateContrato, deleteContrato, setores, getSetorNome, addLog, enviarWebhook, addAlerta, appConfig, setAppConfig, parcelas, addParcelas, updateParcela, deleteParcela, getParcelasContrato } = useData();
   const { currentUser, isAdmin } = useAuth();
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -113,6 +113,22 @@ export default function Contratos() {
     vigenciaMeses?: number;
     vigenciaTexto?: string;
   } | null>(null);
+  const [showAddTipo, setShowAddTipo] = useState(false);
+  const [novoTipo, setNovoTipo] = useState("");
+
+  // Dynamic contract types
+  const tiposContrato = appConfig.tiposContrato?.length ? appConfig.tiposContrato : TIPOS_CONTRATO_DEFAULT;
+
+  const handleAddTipo = () => {
+    const nome = novoTipo.trim();
+    if (!nome) return;
+    if (tiposContrato.includes(nome)) { toast({ title: "Tipo já existe", variant: "destructive" }); return; }
+    const updated = [...tiposContrato, nome];
+    setAppConfig({ tiposContrato: updated });
+    setNovoTipo("");
+    setShowAddTipo(false);
+    toast({ title: "Tipo adicionado", description: nome });
+  };
 
   // Auto-calculate vencimento when dataInicio + vigenciaMeses change
   useEffect(() => {
@@ -341,7 +357,7 @@ export default function Contratos() {
             'manutenção': 'Manutenção', 'obra': 'Obra',
           };
           const mapped = tipoMap[llmResult.tipoServico.toLowerCase()] || 
-            TIPOS_CONTRATO.find(t => t.toLowerCase().includes(llmResult.tipoServico!.toLowerCase())) || 
+            tiposContrato.find(t => t.toLowerCase().includes(llmResult.tipoServico!.toLowerCase())) || 
             llmResult.tipoServico;
           handleTipoChange(mapped); // This also sets setor and modeloCobranca
           autoFilled = true;
@@ -588,10 +604,23 @@ export default function Contratos() {
                   className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring" />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Tipo de Contrato *</label>
+                <label className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+                  Tipo de Contrato *
+                  <button type="button" onClick={() => setShowAddTipo(!showAddTipo)} className="text-primary hover:text-primary/80 text-xs font-normal">
+                    {showAddTipo ? '✕ Cancelar' : '+ Novo tipo'}
+                  </button>
+                </label>
+                {showAddTipo && (
+                  <div className="flex gap-2 mb-1">
+                    <input value={novoTipo} onChange={(e) => setNovoTipo(e.target.value)} placeholder="Nome do novo tipo"
+                      className="flex-1 px-3 py-1.5 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring"
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddTipo()} />
+                    <button type="button" onClick={handleAddTipo} className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm hover:opacity-90">Adicionar</button>
+                  </div>
+                )}
                 <select value={tipo} onChange={(e) => handleTipoChange(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring">
-                  {TIPOS_CONTRATO.map(t => <option key={t} value={t}>{t}</option>)}
+                  {tiposContrato.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
               <div className="space-y-1.5 md:col-span-2 lg:col-span-3">
