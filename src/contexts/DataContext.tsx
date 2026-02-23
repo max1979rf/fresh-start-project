@@ -101,11 +101,11 @@ function mapContratoFromDB(row: Record<string, unknown>): Contrato {
         excluido: row.excluido as boolean,
         excluidoPor: (row.excluido_por as string) ?? undefined,
         excluidoEm: (row.excluido_em as string) ?? undefined,
-        // Vigência
-        vigenciaMeses: row.vigencia_meses != null ? Number(row.vigencia_meses) : undefined,
-        // Modelo financeiro (kept in local state only, not in DB)
-        // Obra fields (kept in local state only, not in DB)
+        // Fields not in DB but used locally
         saldoContrato: (row.saldo_contrato as string) ?? undefined,
+        qtdMedicoes: row.qtd_medicoes != null ? Number(row.qtd_medicoes) : undefined,
+        medicaoAtual: row.medicao_atual != null ? Number(row.medicao_atual) : undefined,
+        valorMedicao: (row.valor_medicao as string) ?? undefined,
     };
 }
 
@@ -313,7 +313,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             status: c.status, data_inicio: brToIso(c.dataInicio), data_vencimento: brToIso(c.dataVencimento),
             criado_por: c.criadoPor, criado_em: c.criadoEm,
             excluido: false,
-            vigencia_meses: c.vigenciaMeses ?? null,
         })));
         await supabase.from('clientes').insert(SEED_CLIENTES.map(c => ({
             id: c.id, nome_fantasia: c.nomeFantasia, razao_social: c.razaoSocial,
@@ -647,7 +646,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             criado_por: novo.criadoPor, criado_em: novo.criadoEm,
             arquivo_pdf: novo.arquivoPdf ?? null, nome_arquivo: novo.nomeArquivo ?? null,
             excluido: false,
-            vigencia_meses: novo.vigenciaMeses ?? null,
+            qtd_medicoes: novo.qtdMedicoes ?? null,
+            medicao_atual: novo.medicaoAtual ?? null,
+            valor_medicao: novo.valorMedicao ?? null,
+            saldo_contrato: novo.saldoContrato ?? null,
         }).then(({ error }) => {
             if (error) {
                 console.error('Failed to save contrato:', error);
@@ -679,8 +681,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         if (data.excluido !== undefined) dbUpdate.excluido = data.excluido;
         if (data.excluidoPor !== undefined) dbUpdate.excluido_por = data.excluidoPor;
         if (data.excluidoEm !== undefined) dbUpdate.excluido_em = data.excluidoEm;
-        if (data.vigenciaMeses !== undefined) dbUpdate.vigencia_meses = data.vigenciaMeses ?? null;
-        // Financial/obra fields are kept in local state only (columns don't exist in DB)
+        // Obra fields that exist in DB
+        if (data.qtdMedicoes !== undefined) dbUpdate.qtd_medicoes = data.qtdMedicoes ?? null;
+        if (data.medicaoAtual !== undefined) dbUpdate.medicao_atual = data.medicaoAtual ?? null;
+        if (data.valorMedicao !== undefined) dbUpdate.valor_medicao = data.valorMedicao ?? null;
+        if (data.saldoContrato !== undefined) dbUpdate.saldo_contrato = data.saldoContrato ?? null;
         supabase.from('contratos').update(dbUpdate).eq('id', id).then(({ error }) => {
             if (error) console.error('Failed to update contrato:', error);
         });
