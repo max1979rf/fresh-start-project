@@ -14,6 +14,11 @@ interface ContratoViewerProps {
     vencimento?: string;
 }
 
+function isStorageUrl(value?: string): boolean {
+    if (!value) return false;
+    return value.startsWith('http://') || value.startsWith('https://');
+}
+
 export default function ContratoViewer({ open, onClose, arquivoPdf, nomeArquivo, numeroContrato, objeto, empresa, status, vencimento }: ContratoViewerProps) {
     const [blobUrl, setBlobUrl] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
@@ -21,27 +26,33 @@ export default function ContratoViewer({ open, onClose, arquivoPdf, nomeArquivo,
     useEffect(() => {
         let currentUrl: string | null = null;
 
-        if (open && arquivoPdf && arquivoPdf.startsWith('data:application/pdf')) {
-            setLoading(true);
-            try {
-                const base64Content = arquivoPdf.split(',')[1];
-                const byteCharacters = atob(base64Content);
-                const byteNumbers = new Array(byteCharacters.length);
-                for (let i = 0; i < byteCharacters.length; i++) {
-                    byteNumbers[i] = byteCharacters.charCodeAt(i);
-                }
-                const byteArray = new Uint8Array(byteNumbers);
-                const blob = new Blob([byteArray], { type: 'application/pdf' });
-                currentUrl = URL.createObjectURL(blob);
-                setBlobUrl(currentUrl);
-            } catch (err) {
-                console.error("Erro ao gerar Blob URL do PDF:", err);
-                setBlobUrl(arquivoPdf); // Fallback to raw data URI
-            } finally {
+        if (open && arquivoPdf) {
+            if (isStorageUrl(arquivoPdf)) {
+                // Storage URL - use directly
+                setBlobUrl(arquivoPdf);
                 setLoading(false);
+            } else if (arquivoPdf.startsWith('data:application/pdf')) {
+                setLoading(true);
+                try {
+                    const base64Content = arquivoPdf.split(',')[1];
+                    const byteCharacters = atob(base64Content);
+                    const byteNumbers = new Array(byteCharacters.length);
+                    for (let i = 0; i < byteCharacters.length; i++) {
+                        byteNumbers[i] = byteCharacters.charCodeAt(i);
+                    }
+                    const byteArray = new Uint8Array(byteNumbers);
+                    const blob = new Blob([byteArray], { type: 'application/pdf' });
+                    currentUrl = URL.createObjectURL(blob);
+                    setBlobUrl(currentUrl);
+                } catch (err) {
+                    console.error("Erro ao gerar Blob URL do PDF:", err);
+                    setBlobUrl(arquivoPdf);
+                } finally {
+                    setLoading(false);
+                }
+            } else {
+                setBlobUrl(arquivoPdf);
             }
-        } else if (open && arquivoPdf) {
-            setBlobUrl(arquivoPdf); // Non-PDF data URIs (DOCX etc)
         } else {
             setBlobUrl(null);
         }
@@ -53,18 +64,24 @@ export default function ContratoViewer({ open, onClose, arquivoPdf, nomeArquivo,
         };
     }, [open, arquivoPdf]);
 
-
     if (!open) return null;
 
     const handleDownload = () => {
         if (!arquivoPdf) return;
-        const link = document.createElement('a');
-        link.href = arquivoPdf;
-        link.download = nomeArquivo || `${numeroContrato}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        if (isStorageUrl(arquivoPdf)) {
+            window.open(arquivoPdf, '_blank');
+        } else {
+            const link = document.createElement('a');
+            link.href = arquivoPdf;
+            link.download = nomeArquivo || `${numeroContrato}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
     };
+
+    const isDocFile = nomeArquivo && (nomeArquivo.toLowerCase().endsWith('.doc') || nomeArquivo.toLowerCase().endsWith('.docx'));
+    const isPdfViewable = !isDocFile;
 
     return (
         <AnimatePresence>
@@ -185,31 +202,46 @@ export default function ContratoViewer({ open, onClose, arquivoPdf, nomeArquivo,
                                 </div>
                             </div>
 
-                            {/* PDF View Area */}
-                            <div className="flex-1 bg-white/50 dark:bg-slate-900/50 relative">
+                            {/* Document View Area */}
+                            <div className="flex-1 bg-muted/5 relative">
                                 {loading ? (
                                     <div className="flex flex-col items-center justify-center h-full gap-2">
                                         <Loader2 className="w-8 h-8 text-primary animate-spin" />
                                         <p className="text-xs text-muted-foreground">Processando documento...</p>
                                     </div>
-                                ) : blobUrl ? (
+                                ) : blobUrl && isPdfViewable ? (
                                     <div className="w-full h-full flex flex-col">
-                                        {/* Browser PDF viewer or iframe */}
                                         <iframe
-                                            src={`${blobUrl}#toolbar=0&navpanes=0&scrollbar=0`}
+                                            src={isStorageUrl(blobUrl) ? blobUrl : `${blobUrl}#toolbar=0&navpanes=0&scrollbar=0`}
                                             className="w-full h-full border-none shadow-inner"
                                             style={{ minHeight: "calc(90vh - 65px)" }}
                                             title={`Visualização de ${numeroContrato}`}
                                         />
                                     </div>
+                                ) : blobUrl && isDocFile ? (
+                                    <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+                                        <div className="w-16 h-16 rounded-3xl bg-primary/5 flex items-center justify-center mb-6">
+                                            <FileText className="w-8 h-8 text-primary" />
+                                        </div>
+                                        <h4 className="text-base font-semibold text-foreground mb-2">Documento Word ({nomeArquivo?.split('.').pop()?.toUpperCase()})</h4>
+                                        <p className="text-xs text-muted-foreground max-w-[280px] leading-relaxed mb-4">
+                                            Arquivos DOC/DOCX não podem ser visualizados diretamente no navegador. Clique abaixo para baixar.
+                                        </p>
+                                        <button
+                                            onClick={handleDownload}
+                                            className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
+                                        >
+                                            <Download className="w-4 h-4" /> Baixar {nomeArquivo}
+                                        </button>
+                                    </div>
                                 ) : (
-                                    <div className="flex flex-col items-center justify-center h-full p-8 text-center bg-muted/5">
+                                    <div className="flex flex-col items-center justify-center h-full p-8 text-center">
                                         <div className="w-16 h-16 rounded-3xl bg-primary/5 flex items-center justify-center mb-6 rotate-3">
                                             <FileText className="w-8 h-8 text-primary opacity-30" />
                                         </div>
                                         <h4 className="text-base font-semibold text-foreground mb-2">Prévia não disponível</h4>
                                         <p className="text-xs text-muted-foreground max-w-[240px] leading-relaxed">
-                                            Este contrato não possui um documento PDF anexado ou o formato não é suportado para visualização direta.
+                                            Este contrato não possui um documento anexado ou o formato não é suportado para visualização direta.
                                         </p>
                                     </div>
                                 )}
