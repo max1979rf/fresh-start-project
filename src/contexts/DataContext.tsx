@@ -642,12 +642,17 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const addContrato = useCallback((data: Omit<Contrato, 'id' | 'criadoEm'>): Contrato => {
         const novo: Contrato = { ...data, id: 'ct_' + generateId(), criadoEm: new Date().toISOString() };
         setContratos(prev => [...prev, novo]);
+        
+        // Garantir data_inicio válida (NOT NULL no banco)
+        const dataInicioISO = brToIso(novo.dataInicio) || novo.dataInicio || new Date().toISOString().split('T')[0];
+        const dataVencimentoISO = brToIso(novo.dataVencimento) || novo.dataVencimento || new Date().toISOString().split('T')[0];
+        
         supabase.from('contratos').insert({
             id: novo.id, numero: novo.numero, descricao: novo.descricao, empresa: novo.empresa,
             objeto: novo.objeto, tipo: novo.tipo, id_setor: novo.idSetor, valor: novo.valor,
             status: novo.status,
-            data_inicio: brToIso(novo.dataInicio) || new Date().toISOString().split('T')[0],
-            data_vencimento: brToIso(novo.dataVencimento) || new Date().toISOString().split('T')[0],
+            data_inicio: dataInicioISO,
+            data_vencimento: dataVencimentoISO,
             criado_por: novo.criadoPor, criado_em: novo.criadoEm,
             arquivo_pdf: novo.arquivoPdf ?? null, nome_arquivo: novo.nomeArquivo ?? null,
             excluido: false,
@@ -663,7 +668,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             valor_medicao: novo.valorMedicao ?? null,
             saldo_contrato: novo.saldoContrato ?? null,
         }).then(({ error }) => {
-            if (error) { console.error('Failed to save contrato:', error); setContratos(prev => prev.filter(c => c.id !== novo.id)); }
+            if (error) {
+                console.error('Failed to save contrato:', error);
+                console.error('Insert payload data_inicio:', dataInicioISO, 'data_vencimento:', dataVencimentoISO);
+                setContratos(prev => prev.filter(c => c.id !== novo.id));
+                // Dispara toast de erro para o usuário
+                window.dispatchEvent(new CustomEvent('supabase-error', { detail: `Erro ao salvar contrato no banco: ${error.message}` }));
+            }
         });
         return novo;
     }, []);
