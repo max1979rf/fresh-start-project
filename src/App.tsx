@@ -18,6 +18,7 @@ import ModelosContratos from "./pages/ModelosContratos";
 import Relatorios from "./pages/Relatorios";
 import Creditos from "./pages/Creditos";
 import ChatIA from "./pages/ChatIA";
+import Financeiro from "./pages/Financeiro";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 
@@ -47,6 +48,7 @@ const App = () => (
                 <Route path="/usuarios" element={
                   <ProtectedRoute adminOnly><Usuarios /></ProtectedRoute>
                 } />
+                <Route path="/financeiro" element={<Financeiro />} />
                 <Route path="/alertas" element={<Alertas />} />
                 <Route path="/auditoria" element={
                   <ProtectedRoute adminOnly><Auditoria /></ProtectedRoute>
