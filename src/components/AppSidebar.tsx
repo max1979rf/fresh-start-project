@@ -17,6 +17,7 @@ import {
   BarChart3,
   Coins,
   MessageSquare,
+  DollarSign,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useData } from "../contexts/DataContext";
@@ -28,6 +29,7 @@ const allNavItems = [
   { to: "/modelos", icon: BookOpen, label: "Modelos", adminOnly: false },
   { to: "/setores", icon: Building2, label: "Setores", adminOnly: true },
   { to: "/usuarios", icon: Users, label: "Usuários", adminOnly: true },
+  { to: "/financeiro", icon: DollarSign, label: "Financeiro", adminOnly: false },
   { to: "/alertas", icon: Bell, label: "Alertas", adminOnly: false },
   { to: "/relatorios", icon: BarChart3, label: "Relatórios", adminOnly: false },
   { to: "/auditoria", icon: Shield, label: "Auditoria", adminOnly: true },
