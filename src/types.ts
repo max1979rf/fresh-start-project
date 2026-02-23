@@ -112,6 +112,7 @@ export interface AppConfig {
   llmTopP?: number;
   llmFrequencyPenalty?: number;
   llmPresencePenalty?: number;
+  tiposContrato?: string[];
   apiKey?: string;
   empresaId?: string;
   apiKeyCreatedAt?: string;
