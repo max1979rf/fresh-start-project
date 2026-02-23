@@ -9,6 +9,7 @@ import AnalysisAlert, { type AnalysisResult } from "../components/AnalysisAlert"
 import { extractTextFromPdf, extractTextFromDocx, parseContractFields, parseVigenciaMeses, analyzeContract, analyzeValues, generateContractNumber } from "../utils/pdfAnalyzer";
 import { analyzeContractWithLlm } from "../utils/llmService";
 import { brToIso, isoToBr } from "../utils/dateUtils";
+import { uploadContratoFile, isStorageUrl } from "../services/storageService";
 import type { TipoContrato, ModeloCobranca, Parcela } from "../types";
 
 const TIPOS_CONTRATO_DEFAULT: string[] = ['Serviços de TI', 'Sistema / Software', 'Infraestrutura', 'Implantação', 'Manutenção', 'Obra', 'Outros'];
@@ -88,6 +89,7 @@ export default function Contratos() {
   const [vigenciaMeses, setVigenciaMeses] = useState<string>("");
   const [arquivoPdf, setArquivoPdf] = useState<string | undefined>(undefined);
   const [nomeArquivo, setNomeArquivo] = useState<string | undefined>(undefined);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Financial model
@@ -214,7 +216,7 @@ export default function Contratos() {
     setTipo("Serviços de TI"); setIdSetor(isAdmin ? "" : (currentUser?.idSetor || ""));
     setValor(""); setStatusContrato('Vigente');
     setDataInicio(""); setDataVencimento(""); setVigenciaMeses("");
-    setArquivoPdf(undefined); setNomeArquivo(undefined);
+    setArquivoPdf(undefined); setNomeArquivo(undefined); setUploadedFile(null);
     setModeloCobranca('geral');
     setValorImplantacao(""); setValorManutencaoMensal("");
     setQtdPagamentos(""); setValorPrestacao("");
@@ -276,6 +278,7 @@ export default function Contratos() {
 
     setArquivoPdf(dataUri);
     setNomeArquivo(file.name);
+    setUploadedFile(file);
     setError(null);
 
     if (!showForm) { setShowForm(true); setEditingId(null); }
@@ -481,7 +484,7 @@ export default function Contratos() {
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setError(null);
     const missing: string[] = [];
     if (!numero.trim()) missing.push("Nº Contrato");
@@ -491,6 +494,24 @@ export default function Contratos() {
     if (missing.length > 0) {
       setError(`Preencha os campos obrigatórios: ${missing.join(', ')}`);
       return;
+    }
+
+    // Upload file to Supabase Storage if there's a new file
+    let finalArquivoPdf = arquivoPdf;
+    let finalNomeArquivo = nomeArquivo;
+    
+    if (uploadedFile) {
+      toast({ title: "📤 Enviando arquivo...", description: "Salvando documento no servidor..." });
+      const tempId = editingId || ('ct_' + Date.now().toString(36));
+      const result = await uploadContratoFile(uploadedFile, tempId);
+      if (result) {
+        finalArquivoPdf = result.url;
+        finalNomeArquivo = nomeArquivo;
+        toast({ title: "✅ Arquivo enviado", description: "Documento salvo com sucesso." });
+      } else {
+        toast({ title: "❌ Erro no upload", description: "Não foi possível enviar o arquivo. O contrato será salvo sem o documento.", variant: "destructive" });
+        finalArquivoPdf = undefined;
+      }
     }
 
     const obraFields = tipo === 'Obra' ? {
@@ -514,7 +535,7 @@ export default function Contratos() {
         numero: numero.trim(), descricao: descricao.trim(), empresa: empresa.trim(),
         objeto: objeto.trim() || descricao.trim(), tipo, idSetor, valor, status: statusContrato as any,
         dataInicio: isoToBr(dataInicio), dataVencimento: isoToBr(dataVencimento),
-        arquivoPdf, nomeArquivo,
+        arquivoPdf: finalArquivoPdf, nomeArquivo: finalNomeArquivo,
         ...obraFields, ...financialFields,
       });
       addLog(currentUser!.id, currentUser!.nome, 'Contrato editado', `Contrato: ${numero.trim()}`);
@@ -526,7 +547,7 @@ export default function Contratos() {
         numero: numero.trim(), descricao: descricao.trim(), empresa: empresa.trim(),
         objeto: objeto.trim() || descricao.trim(), tipo, idSetor, valor, status: statusContrato as any,
         dataInicio: isoToBr(dataInicioFinal), dataVencimento: isoToBr(dataVencimentoFinal),
-        criadoPor: currentUser!.id, arquivoPdf, nomeArquivo,
+        criadoPor: currentUser!.id, arquivoPdf: finalArquivoPdf, nomeArquivo: finalNomeArquivo,
         ...obraFields, ...financialFields,
       });
       // Generate parcelas for new contract
@@ -550,12 +571,17 @@ export default function Contratos() {
 
   const handleDownload = (c: typeof contratos[0]) => {
     if (!c.arquivoPdf) return;
-    const link = document.createElement('a');
-    link.href = c.arquivoPdf;
-    link.download = c.nomeArquivo || `${c.numero}.pdf`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    if (isStorageUrl(c.arquivoPdf)) {
+      // Open storage URL in new tab for download
+      window.open(c.arquivoPdf, '_blank');
+    } else {
+      const link = document.createElement('a');
+      link.href = c.arquivoPdf;
+      link.download = c.nomeArquivo || `${c.numero}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
   };
 
   const handleSendToIA = async (c: typeof contratos[0]) => {
