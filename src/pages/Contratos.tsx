@@ -370,7 +370,12 @@ export default function Contratos() {
           handleTipoChange(mapped); // This also sets setor and modeloCobranca
           autoFilled = true;
         }
-        if (llmResult.vigenciaMeses) setVigenciaMeses(String(llmResult.vigenciaMeses));
+        if (llmResult.vigenciaMeses) {
+          setVigenciaMeses(String(llmResult.vigenciaMeses));
+          // Qtd prestações = meses de vigência
+          setQtdPagamentos(String(llmResult.vigenciaMeses));
+          autoFilled = true;
+        }
 
         // ── Apply financial values from LLM ──
         if (llmResult.valorImplantacao) {
@@ -379,7 +384,8 @@ export default function Contratos() {
         }
         if (llmResult.valorMensalidade) {
           setValorManutencaoMensal(llmResult.valorMensalidade);
-          // If we have mensalidade, it's a TI-style contract
+          // Valor da prestação = valor mensal recorrente
+          setValorPrestacao(llmResult.valorMensalidade);
           setModeloCobranca('ti');
           autoFilled = true;
         }
