@@ -14,6 +14,24 @@ export interface User {
   criadoEm: string;
 }
 
+export type TipoContrato = 'Serviços de TI' | 'Sistema / Software' | 'Infraestrutura' | 'Implantação' | 'Manutenção' | 'Obra' | 'Outros';
+
+export type ModeloCobranca = 'ti' | 'geral';
+
+export type StatusParcela = 'pendente' | 'pago';
+
+export interface Parcela {
+  id: string;
+  idContrato: string;
+  numero: number;
+  valor: string;
+  dataVencimento: string; // ISO format
+  status: StatusParcela;
+  quitado: boolean;
+  criadoEm: string;
+  atualizadoEm?: string;
+}
+
 export interface Contrato {
   id: string;
   numero: string;
@@ -23,24 +41,31 @@ export interface Contrato {
   tipo: string;
   idSetor: string;
   valor: string;
-  status: 'Vigente' | 'Vencendo' | 'Vencido' | 'Encerrado';
+  status: 'Vigente' | 'Vencendo' | 'Vencido' | 'Encerrado' | 'Quitado' | 'Em Aberto';
   dataInicio: string;
   dataVencimento: string;
   criadoPor: string;
   criadoEm: string;
-  arquivoPdf?: string; // base64 data URI
+  arquivoPdf?: string;
   nomeArquivo?: string;
   excluido?: boolean;
   excluidoPor?: string;
   excluidoEm?: string;
-  // Campos específicos para contratos de Obra (construção civil)
-  qtdMedicoes?: number;    // Quantidade total de medições previstas
-  medicaoAtual?: number;   // Número da medição atual
-  valorMedicao?: string;   // Valor da medição atual (ex: "R$ 15.000,00")
-  saldoContrato?: string;  // Saldo restante após medições (ex: "R$ 200.000,00")
-  // Integração com Sistema MV
-  integradoMv?: boolean;   // Se o contrato já foi sincronizado com o MV
-  idMv?: string;           // Identificador do contrato no Sistema MV
+  // Vigência
+  vigenciaMeses?: number;
+  // Modelo financeiro
+  modeloCobranca?: ModeloCobranca;
+  valorImplantacao?: string;
+  valorManutencaoMensal?: string;
+  qtdPagamentos?: number;
+  valorPrestacao?: string;
+  // Campos específicos para contratos de Obra
+  qtdMedicoes?: number;
+  medicaoAtual?: number;
+  valorMedicao?: string;
+  saldoContrato?: string;
+  // Parcelas (loaded separately)
+  parcelas?: Parcela[];
 }
 
 export interface LogEntry {
@@ -72,8 +97,7 @@ export interface AppConfig {
   nomeEmpresa?: string;
   alertaEmailAtivo?: boolean;
   alertasAtivos?: boolean;
-  emailsAlertaSetor?: Record<string, string>; // { [setorId]: email }
-  // LLM Integration (RF01)
+  emailsAlertaSetor?: Record<string, string>;
   llmProvider?: 'openai' | 'anthropic' | 'google' | 'meta' | 'mistral' | 'cohere' | 'deepseek' | 'groq' | 'perplexity' | 'xai' | 'gptmaker' | 'custom';
   llmApiKey?: string;
   llmModel?: string;
@@ -88,7 +112,6 @@ export interface AppConfig {
   llmTopP?: number;
   llmFrequencyPenalty?: number;
   llmPresencePenalty?: number;
-  // API Aberta (RF03)
   apiKey?: string;
   empresaId?: string;
   apiKeyCreatedAt?: string;
@@ -129,6 +152,6 @@ export interface Empresa {
   id: string;
   nome: string;
   sigla: string;
-  logo?: string; // base64
+  logo?: string;
   criadoEm: string;
 }
