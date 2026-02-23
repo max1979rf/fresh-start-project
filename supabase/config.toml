@@ -1,0 +1,7 @@
+project_id = "qbluriwyagfgpaxdjojl"
+
+[functions.send-alert-email]
+verify_jwt = false
+
+[functions.save-config]
+verify_jwt = false
