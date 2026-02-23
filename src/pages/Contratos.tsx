@@ -122,7 +122,14 @@ export default function Contratos() {
     }
   }, [dataInicio, vigenciaMeses]);
 
-  // Auto-calculate valor total based on modelo
+  // Auto-sync qtdPagamentos with vigenciaMeses
+  useEffect(() => {
+    if (vigenciaMeses && parseInt(vigenciaMeses) > 0) {
+      setQtdPagamentos(vigenciaMeses);
+    }
+  }, [vigenciaMeses]);
+
+  // Auto-calculate valor total and valor prestação based on modelo
   useEffect(() => {
     if (modeloCobranca === 'ti') {
       const impl = parseCurrency(valorImplantacao);
@@ -130,6 +137,11 @@ export default function Contratos() {
       const meses = parseInt(vigenciaMeses) || 0;
       const total = impl + (mensal * meses);
       if (total > 0) setValor(formatCurrency(total));
+      // Valor da prestação = manutenção + (implantação / meses)
+      if (meses > 0) {
+        const prestacao = mensal + (impl / meses);
+        if (prestacao > 0) setValorPrestacao(formatCurrency(prestacao));
+      }
     } else if (modeloCobranca === 'geral') {
       const qtd = parseInt(qtdPagamentos) || 0;
       const vlr = parseCurrency(valorPrestacao);
@@ -556,9 +568,11 @@ export default function Contratos() {
                 </select>
               </div>
               <div className="space-y-1.5 md:col-span-2 lg:col-span-3">
-                <label className="text-xs font-medium text-muted-foreground">Descrição / Objeto *</label>
-                <input value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Descrição do contrato"
-                  className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring" />
+                <label className="text-xs font-medium text-muted-foreground">Nome / Descrição do Contrato *</label>
+                <input value={descricao} onChange={(e) => setDescricao(e.target.value)} 
+                  placeholder="Ex: CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE IMPLANTAÇÃO, MANUTENÇÃO E ATUALIZAÇÃO DE SISTEMA"
+                  className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring uppercase"
+                  style={{ textTransform: 'uppercase' }} />
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground">Setor *</label>
@@ -629,7 +643,7 @@ export default function Contratos() {
               </div>
 
               {modeloCobranca === 'ti' ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-muted-foreground">Valor de Implantação</label>
                     <input value={valorImplantacao} onChange={(e) => setValorImplantacao(e.target.value)} placeholder="R$ 0,00 (opcional)"
@@ -641,10 +655,16 @@ export default function Contratos() {
                       className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring" />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-muted-foreground">Qtd. Pagamentos Mensais</label>
-                    <input type="number" min="1" value={vigenciaMeses} disabled
+                    <label className="text-xs font-medium text-muted-foreground">Qtd. Prestações</label>
+                    <input type="number" min="1" value={qtdPagamentos} disabled
                       className="w-full px-3 py-2 rounded-lg border border-input bg-muted text-sm outline-none cursor-not-allowed" />
-                    <p className="text-[10px] text-muted-foreground">Baseado na vigência</p>
+                    <p className="text-[10px] text-muted-foreground">= Vigência em meses</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">Valor da Prestação (calc.)</label>
+                    <input value={valorPrestacao} disabled
+                      className="w-full px-3 py-2 rounded-lg border border-input bg-muted text-sm outline-none cursor-not-allowed" />
+                    <p className="text-[10px] text-muted-foreground">Manutenção + (Implant. ÷ meses)</p>
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-muted-foreground">Valor Total (calculado)</label>
@@ -656,8 +676,9 @@ export default function Contratos() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-muted-foreground">Qtd. Prestações</label>
-                    <input type="number" min="1" value={qtdPagamentos} onChange={(e) => setQtdPagamentos(e.target.value)} placeholder="Ex: 12"
-                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring" />
+                    <input type="number" min="1" value={qtdPagamentos} disabled
+                      className="w-full px-3 py-2 rounded-lg border border-input bg-muted text-sm outline-none cursor-not-allowed" />
+                    <p className="text-[10px] text-muted-foreground">= Vigência em meses</p>
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-muted-foreground">Valor de Cada Prestação</label>
