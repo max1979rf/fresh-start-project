@@ -186,6 +186,10 @@ export interface LlmContractAnalysis {
     tipoServico?: string;
     descricaoObjeto?: string;
     clausulasAbusivas: { descricao: string; severidade: 'alta' | 'media' | 'baixa' }[];
+    /** Missing signatures or authentication issues found. */
+    assinaturasAusentes: string[];
+    /** General vulnerabilities found in the contract. */
+    vulnerabilidades: string[];
     alertas: string[];
 }
 
@@ -205,6 +209,8 @@ const CONTRACT_ANALYSIS_PROMPT = `Você é um analista jurídico especializado e
   "tipoServico": "Serviço|Fornecimento|Obra|Consultoria|Locação",
   "descricaoObjeto": "descrição resumida (máx 200 chars)",
   "clausulasAbusivas": [{ "descricao": "descrição", "severidade": "alta|media|baixa" }],
+  "assinaturasAusentes": ["descrição de cada assinatura ausente ou problema de autenticação"],
+  "vulnerabilidades": ["descrição de cada vulnerabilidade jurídica encontrada"],
   "alertas": ["observações adicionais"]
 }
 
@@ -247,7 +253,18 @@ REGRAS CRÍTICAS:
    - breakdownValor: Descreva o cálculo (ex: "R$ 2.000,00 (implantação) + R$ 500,00 × 12 meses (manutenção) = R$ 8.000,00").
    - Formate todos os valores como "R$ X.XXX,XX".
 
-6. JSON APENAS: Não inclua nenhum texto fora do objeto JSON.`;
+6. ASSINATURAS AUSENTES (assinaturasAusentes):
+   - Verifique se há campos de assinatura em branco, testemunhas ausentes, falta de reconhecimento de firma.
+   - Identifique se CONTRATANTE ou CONTRATADA não possui campo de assinatura.
+   - Verifique se há datas de assinatura ausentes.
+   - Array vazio se tudo está completo.
+
+7. VULNERABILIDADES (vulnerabilidades):
+   - Identifique fragilidades jurídicas: prazos sem penalidade, falta de cláusula de confidencialidade, ausência de foro, omissão de LGPD, falta de garantias, etc.
+   - Identifique riscos financeiros: ausência de reajuste, multas desproporcionais, etc.
+   - Array vazio se nenhuma vulnerabilidade encontrada.
+
+8. JSON APENAS: Não inclua nenhum texto fora do objeto JSON.`;
 
 /** Adds N months to an ISO date string (YYYY-MM-DD) and returns the result as YYYY-MM-DD. */
 function addMonthsToIso(isoDate: string, months: number): string {
@@ -329,6 +346,12 @@ export async function analyzeContractWithLlm(
             descricaoObjeto: parsed.descricaoObjeto || undefined,
             clausulasAbusivas: Array.isArray(parsed.clausulasAbusivas)
                 ? parsed.clausulasAbusivas
+                : [],
+            assinaturasAusentes: Array.isArray(parsed.assinaturasAusentes)
+                ? parsed.assinaturasAusentes
+                : [],
+            vulnerabilidades: Array.isArray(parsed.vulnerabilidades)
+                ? parsed.vulnerabilidades
                 : [],
             alertas: Array.isArray(parsed.alertas) ? parsed.alertas : [],
         };
