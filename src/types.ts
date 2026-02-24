@@ -94,6 +94,8 @@ export interface AppConfig {
   logoNome?: string;
   webhookGptMaker?: string;
   webhookN8n?: string;
+  gptMakerAgentId?: string;
+  gptMakerApiKey?: string;
   nomeEmpresa?: string;
   alertaEmailAtivo?: boolean;
   alertasAtivos?: boolean;
