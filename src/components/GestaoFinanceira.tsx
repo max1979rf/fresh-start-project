@@ -62,25 +62,6 @@ function formatDateBR(dateStr: string): string {
   return d.toLocaleDateString("pt-BR");
 }
 
-// ─── Local storage for multa/juros per parcela ──────────────
-const STORAGE_KEY = "parcelas_extras";
-
-interface ParcelaExtras {
-  multa: number;
-  juros: number;
-}
-
-function loadExtras(): Record<string, ParcelaExtras> {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch { return {}; }
-}
-
-function saveExtras(data: Record<string, ParcelaExtras>) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-}
-
 // ─── Props ──────────────────────────────────────────────────
 interface GestaoFinanceiraProps {
   contrato: Contrato;
@@ -92,13 +73,24 @@ export default function GestaoFinanceira({ contrato, open, onClose }: GestaoFina
   const { getParcelasContrato, updateParcela, addLog, appConfig, parcelas } = useData();
   const { currentUser } = useAuth();
 
-  const [extras, setExtras] = useState<Record<string, ParcelaExtras>>(loadExtras);
   const [multaGlobal, setMultaGlobal] = useState("");
   const [jurosGlobal, setJurosGlobal] = useState("");
 
   const parcelasList = useMemo(() => {
     return getParcelasContrato(contrato.id).sort((a, b) => a.numero - b.numero);
   }, [contrato.id, getParcelasContrato, parcelas]);
+
+  // Local state for editing multas/juros before saving to DB
+  const [extras, setExtras] = useState<Record<string, { multa: number; juros: number }>>({});
+
+  // Sync local extras with DB data when parcelas change or on mount
+  React.useEffect(() => {
+    const newExtras: Record<string, { multa: number; juros: number }> = {};
+    parcelasList.forEach(p => {
+      newExtras[p.id] = { multa: p.multa || 0, juros: p.juros || 0 };
+    });
+    setExtras(newExtras);
+  }, [parcelasList]);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -120,15 +112,14 @@ export default function GestaoFinanceira({ contrato, open, onClose }: GestaoFina
   const parcelasPagas = useMemo(() =>
     parcelasList.filter(p => p.quitado), [parcelasList]);
 
-  const getExtra = (id: string): ParcelaExtras => extras[id] || { multa: 0, juros: 0 };
+  const getExtra = (id: string) => extras[id] || { multa: 0, juros: 0 };
 
   const setParcelaExtra = useCallback((id: string, field: "multa" | "juros", value: number) => {
-    setExtras(prev => {
-      const updated = { ...prev, [id]: { ...getExtra(id), ...prev[id], [field]: value } };
-      saveExtras(updated);
-      return updated;
-    });
-  }, []);
+    setExtras(prev => ({
+      ...prev,
+      [id]: { ...getExtra(id), [field]: value }
+    }));
+  }, [extras]);
 
   const calcTotal = (p: Parcela) => {
     const base = parseCurrency(p.valor);
@@ -178,7 +169,6 @@ export default function GestaoFinanceira({ contrato, open, onClose }: GestaoFina
       pendentes.forEach(p => {
         updated[p.id] = { ...(updated[p.id] || { multa: 0, juros: 0 }), multa: valor };
       });
-      saveExtras(updated);
       return updated;
     });
     toast({ title: "Multa aplicada", description: `Multa de ${formatCurrency(valor)} aplicada em ${pendentes.length} parcelas pendentes.` });
@@ -193,19 +183,30 @@ export default function GestaoFinanceira({ contrato, open, onClose }: GestaoFina
       pendentes.forEach(p => {
         updated[p.id] = { ...(updated[p.id] || { multa: 0, juros: 0 }), juros: taxa };
       });
-      saveExtras(updated);
       return updated;
     });
     toast({ title: "Juros aplicados", description: `Taxa de ${taxa}% aplicada em ${pendentes.length} parcelas pendentes.` });
   };
 
-  const handleSalvar = () => {
-    saveExtras(extras);
-    if (currentUser) {
-      addLog(currentUser.id, currentUser.nome, "Salvar Financeiro",
-        `Dados financeiros salvos para contrato ${contrato.numero}`);
+  const handleSalvar = async () => {
+    try {
+      toast({ title: "Salvando...", description: "Sincronizando dados com o banco de dados." });
+
+      // Persist each changed parcela to DB
+      const promises = Object.entries(extras).map(([id, data]) => {
+        return updateParcela(id, { multa: data.multa, juros: data.juros });
+      });
+
+      await Promise.all(promises);
+
+      if (currentUser) {
+        addLog(currentUser.id, currentUser.nome, "Salvar Financeiro",
+          `Dados financeiros salvos para contrato ${contrato.numero}`);
+      }
+      toast({ title: "Dados salvos", description: "Informações financeiras sincronizadas com o Supabase." });
+    } catch (err) {
+      toast({ title: "Erro ao salvar", description: "Ocorreu um problema ao sincronizar com o banco.", variant: "destructive" });
     }
-    toast({ title: "Dados salvos", description: "Informações financeiras salvas com sucesso." });
   };
 
   const handlePrintReport = () => {
@@ -440,8 +441,8 @@ export default function GestaoFinanceira({ contrato, open, onClose }: GestaoFina
             {(["todas", "vencidas", "avencer", "pagas"] as const).map(tab => {
               const list = tab === "todas" ? parcelasList
                 : tab === "vencidas" ? parcelasVencidas
-                : tab === "avencer" ? parcelasAVencer
-                : parcelasPagas;
+                  : tab === "avencer" ? parcelasAVencer
+                    : parcelasPagas;
               return (
                 <TabsContent key={tab} value={tab}>
                   {list.length === 0 ? (

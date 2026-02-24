@@ -130,6 +130,8 @@ function mapParcelaFromDB(row: Record<string, unknown>): Parcela {
         quitado: Boolean(row.quitado),
         criadoEm: row.criado_em as string,
         atualizadoEm: (row.atualizado_em as string) ?? undefined,
+        multa: row.multa != null ? Number(row.multa) : undefined,
+        juros: row.juros != null ? Number(row.juros) : undefined,
     };
 }
 
@@ -783,7 +785,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         supabase.from('parcelas').insert(created.map(p => ({
             id: p.id, id_contrato: p.idContrato, numero: p.numero, valor: p.valor,
             data_vencimento: p.dataVencimento, status: p.status, quitado: p.quitado,
-            criado_em: p.criadoEm,
+            criado_em: p.criadoEm, multa: p.multa ?? null, juros: p.juros ?? null,
         }))).then(({ error }: any) => {
             if (error) console.warn('Failed to save parcelas to DB (using localStorage):', error.message);
         });
@@ -801,6 +803,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         if (data.dataVencimento !== undefined) dbUpdate.data_vencimento = data.dataVencimento;
         if (data.status !== undefined) dbUpdate.status = data.status;
         if (data.quitado !== undefined) dbUpdate.quitado = data.quitado;
+        if (data.multa !== undefined) dbUpdate.multa = data.multa;
+        if (data.juros !== undefined) dbUpdate.juros = data.juros;
         supabase.from('parcelas').update(dbUpdate).eq('id', id).then(({ error }) => {
             if (error) console.warn('Failed to update parcela in DB (using localStorage):', error.message);
         });

@@ -30,6 +30,8 @@ export interface Parcela {
   quitado: boolean;
   criadoEm: string;
   atualizadoEm?: string;
+  multa?: number;
+  juros?: number;
 }
 
 export interface Contrato {

@@ -98,6 +98,7 @@ export default function Contratos() {
   const [valorManutencaoMensal, setValorManutencaoMensal] = useState("");
   const [qtdPagamentos, setQtdPagamentos] = useState<string>("");
   const [valorPrestacao, setValorPrestacao] = useState("");
+  const [multaPercentual, setMultaPercentual] = useState<number>(0);
 
   // Obra fields
   const [qtdMedicoes, setQtdMedicoes] = useState<string>("");
@@ -220,6 +221,7 @@ export default function Contratos() {
     setModeloCobranca('geral');
     setValorImplantacao(""); setValorManutencaoMensal("");
     setQtdPagamentos(""); setValorPrestacao("");
+    setMultaPercentual(0);
     setQtdMedicoes(""); setMedicaoAtual(""); setValorMedicao(""); setSaldoContrato("");
     setError(null);
     setAiBreakdown(null);
@@ -252,6 +254,7 @@ export default function Contratos() {
     setValorManutencaoMensal(c.valorManutencaoMensal || "");
     setQtdPagamentos(c.qtdPagamentos != null ? String(c.qtdPagamentos) : "");
     setValorPrestacao(c.valorPrestacao || "");
+    setMultaPercentual(c.multaPercentual || 0);
     setQtdMedicoes(c.qtdMedicoes != null ? String(c.qtdMedicoes) : "");
     setMedicaoAtual(c.medicaoAtual != null ? String(c.medicaoAtual) : "");
     setValorMedicao(c.valorMedicao ?? "");
@@ -429,6 +432,10 @@ export default function Contratos() {
             vigenciaTexto: llmResult.vigenciaMeses ? `${llmResult.vigenciaMeses} ${llmResult.vigenciaMeses === 1 ? 'mês' : 'meses'}` : undefined,
           });
 
+          if (llmResult.multaPercentual) {
+            setMultaPercentual(llmResult.multaPercentual);
+          }
+
           if (llmResult.clausulasAbusivas.length > 0) {
             hasAbusive = true;
             llmResult.clausulasAbusivas.forEach(c => {
@@ -553,6 +560,7 @@ export default function Contratos() {
       valorManutencaoMensal: valorManutencaoMensal.trim() || undefined,
       qtdPagamentos: qtdPagamentos ? parseInt(qtdPagamentos) : undefined,
       valorPrestacao: valorPrestacao.trim() || undefined,
+      multaPercentual: multaPercentual || undefined,
     };
 
     if (editingId) {
@@ -875,7 +883,7 @@ export default function Contratos() {
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-muted-foreground">Qtd. Prestações</label>
                     <input type="number" min="1" value={qtdPagamentos} disabled
@@ -891,6 +899,11 @@ export default function Contratos() {
                     <label className="text-xs font-medium text-muted-foreground">Valor Total (calculado)</label>
                     <input value={valor} disabled
                       className="w-full px-3 py-2 rounded-lg border border-input bg-muted text-sm outline-none font-semibold cursor-not-allowed" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">Multa (%)</label>
+                    <input type="number" step="0.01" value={multaPercentual} onChange={(e) => setMultaPercentual(parseFloat(e.target.value) || 0)} placeholder="0,00%"
+                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring" />
                   </div>
                 </div>
               )}
