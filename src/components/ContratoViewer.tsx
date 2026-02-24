@@ -218,21 +218,14 @@ export default function ContratoViewer({ open, onClose, arquivoPdf, nomeArquivo,
                                             title={`Visualização de ${numeroContrato}`}
                                         />
                                     </div>
-                                ) : blobUrl && isDocFile ? (
-                                    <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-                                        <div className="w-16 h-16 rounded-3xl bg-primary/5 flex items-center justify-center mb-6">
-                                            <FileText className="w-8 h-8 text-primary" />
-                                        </div>
-                                        <h4 className="text-base font-semibold text-foreground mb-2">Documento Word ({nomeArquivo?.split('.').pop()?.toUpperCase()})</h4>
-                                        <p className="text-xs text-muted-foreground max-w-[280px] leading-relaxed mb-4">
-                                            Arquivos DOC/DOCX não podem ser visualizados diretamente no navegador. Clique abaixo para baixar.
-                                        </p>
-                                        <button
-                                            onClick={handleDownload}
-                                            className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
-                                        >
-                                            <Download className="w-4 h-4" /> Baixar {nomeArquivo}
-                                        </button>
+                ) : blobUrl && isDocFile && isStorageUrl(blobUrl) ? (
+                                    <div className="w-full h-full flex flex-col">
+                                        <iframe
+                                            src={`https://docs.google.com/gview?url=${encodeURIComponent(blobUrl)}&embedded=true`}
+                                            className="w-full h-full border-none shadow-inner"
+                                            style={{ minHeight: "calc(90vh - 65px)" }}
+                                            title={`Visualização de ${numeroContrato}`}
+                                        />
                                     </div>
                                 ) : (
                                     <div className="flex flex-col items-center justify-center h-full p-8 text-center">
