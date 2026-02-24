@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import type { Setor, User, Contrato, LogEntry, Alerta, AppConfig, ModeloContrato, Cliente, Empresa, Parcela } from '../types';
+import type { Setor, User, Contrato, LogEntry, Alerta, AppConfig, ModeloContrato, Cliente, Empresa, Parcela, ModeloCobranca } from '../types';
+
 import { supabase } from '@/integrations/supabase/client';
 import { saveConfiguracoes, loadConfiguracoes } from '@/services/configService';
 import { brToIso } from '@/utils/dateUtils';
@@ -101,6 +102,13 @@ function mapContratoFromDB(row: Record<string, unknown>): Contrato {
         excluido: row.excluido as boolean,
         excluidoPor: (row.excluido_por as string) ?? undefined,
         excluidoEm: (row.excluido_em as string) ?? undefined,
+        // Financial fields
+        vigenciaMeses: row.vigencia_meses != null ? Number(row.vigencia_meses) : undefined,
+        modeloCobranca: row.modelo_cobranca as ModeloCobranca | undefined,
+        valorImplantacao: (row.valor_implantacao as string) ?? undefined,
+        valorManutencaoMensal: (row.valor_manutencao_mensal as string) ?? undefined,
+        qtdPagamentos: row.qtd_pagamentos != null ? Number(row.qtd_pagamentos) : undefined,
+        valorPrestacao: (row.valor_prestacao as string) ?? undefined,
         // Fields not in DB but used locally
         saldoContrato: (row.saldo_contrato as string) ?? undefined,
         qtdMedicoes: row.qtd_medicoes != null ? Number(row.qtd_medicoes) : undefined,
@@ -108,6 +116,7 @@ function mapContratoFromDB(row: Record<string, unknown>): Contrato {
         valorMedicao: (row.valor_medicao as string) ?? undefined,
     };
 }
+
 
 function mapParcelaFromDB(row: Record<string, unknown>): Parcela {
     return {
@@ -442,10 +451,22 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
                 if (newStatus !== c.status) {
                     changed = true;
+                    // Auto-generate alerts for overdue installments
+                    if (newStatus === 'Vencido') {
+                        addAlerta({
+                            tipo: 'geral',
+                            urgencia: 'alta',
+                            mensagem: `Contrato ${c.numero} está VENCIDO ou com parcelas em atraso.`,
+                            idContrato: c.id,
+                            numeroContrato: c.numero,
+                            empresa: c.empresa
+                        });
+                    }
                     return { ...c, status: newStatus as Contrato['status'] };
                 }
                 return c;
             });
+
 
             if (changed) {
                 setContratos(updatedContratos);
@@ -632,11 +653,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const addContrato = useCallback((data: Omit<Contrato, 'id' | 'criadoEm'>): Contrato => {
         const novo: Contrato = { ...data, id: 'ct_' + generateId(), criadoEm: new Date().toISOString() };
         setContratos(prev => [...prev, novo]);
-        
+
         // Garantir data_inicio válida (NOT NULL no banco)
         const dataInicioISO = brToIso(novo.dataInicio) || novo.dataInicio || new Date().toISOString().split('T')[0];
         const dataVencimentoISO = brToIso(novo.dataVencimento) || novo.dataVencimento || new Date().toISOString().split('T')[0];
-        
+
         supabase.from('contratos').insert({
             id: novo.id, numero: novo.numero, descricao: novo.descricao, empresa: novo.empresa,
             objeto: novo.objeto, tipo: novo.tipo, id_setor: novo.idSetor, valor: novo.valor,
@@ -650,7 +671,15 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             medicao_atual: novo.medicaoAtual ?? null,
             valor_medicao: novo.valorMedicao ?? null,
             saldo_contrato: novo.saldoContrato ?? null,
+            // Financial fields
+            vigencia_meses: novo.vigenciaMeses ?? null,
+            modelo_cobranca: novo.modeloCobranca ?? null,
+            valor_implantacao: novo.valorImplantacao ?? null,
+            valor_manutencao_mensal: novo.valorManutencaoMensal ?? null,
+            qtd_pagamentos: novo.qtdPagamentos ?? null,
+            valor_prestacao: novo.valorPrestacao ?? null,
         }).then(({ error }) => {
+
             if (error) {
                 console.error('Failed to save contrato:', error);
                 console.error('Insert payload data_inicio:', dataInicioISO, 'data_vencimento:', dataVencimentoISO);
@@ -686,7 +715,15 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         if (data.medicaoAtual !== undefined) dbUpdate.medicao_atual = data.medicaoAtual ?? null;
         if (data.valorMedicao !== undefined) dbUpdate.valor_medicao = data.valorMedicao ?? null;
         if (data.saldoContrato !== undefined) dbUpdate.saldo_contrato = data.saldoContrato ?? null;
+        // Financial fields
+        if (data.vigenciaMeses !== undefined) dbUpdate.vigencia_meses = data.vigenciaMeses ?? null;
+        if (data.modeloCobranca !== undefined) dbUpdate.modelo_cobranca = data.modeloCobranca ?? null;
+        if (data.valorImplantacao !== undefined) dbUpdate.valor_implantacao = data.valorImplantacao ?? null;
+        if (data.valorManutencaoMensal !== undefined) dbUpdate.valor_manutencao_mensal = data.valorManutencaoMensal ?? null;
+        if (data.qtdPagamentos !== undefined) dbUpdate.qtd_pagamentos = data.qtdPagamentos ?? null;
+        if (data.valorPrestacao !== undefined) dbUpdate.valor_prestacao = data.valorPrestacao ?? null;
         supabase.from('contratos').update(dbUpdate).eq('id', id).then(({ error }) => {
+
             if (error) console.error('Failed to update contrato:', error);
         });
         return true;

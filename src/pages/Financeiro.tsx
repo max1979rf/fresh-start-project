@@ -1,4 +1,7 @@
 import { useState, useMemo } from "react";
+import { toast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
+
 import { useData } from "../contexts/DataContext";
 import { useAuth } from "../contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -142,6 +145,7 @@ export default function Financeiro() {
     };
     const s = map[status] || { variant: 'outline' as const, label: status };
     return <Badge variant={s.variant}>{s.label}</Badge>;
+
   };
 
   const cards = [
@@ -223,11 +227,12 @@ export default function Financeiro() {
                   <TableHead>Empresa</TableHead>
                   <TableHead>Setor</TableHead>
                   <TableHead className="text-right">Valor Total</TableHead>
+                  <TableHead className="text-right">Valor Prestação</TableHead>
                   <TableHead className="text-center">Prestações</TableHead>
-                  <TableHead className="text-center">Pagas</TableHead>
-                  <TableHead className="text-center">Pendentes</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead className="text-center">Checklist</TableHead>
+                  <TableHead>Alerta</TableHead>
                   <TableHead className="text-center">Ações</TableHead>
+
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -248,28 +253,49 @@ export default function Financeiro() {
                         <TableCell>{c.empresa}</TableCell>
                         <TableCell>{getSetorNome(c.idSetor)}</TableCell>
                         <TableCell className="text-right font-mono">{c.valor}</TableCell>
+                        <TableCell className="text-right font-mono">{c.valorPrestacao || '—'}</TableCell>
                         <TableCell className="text-center">{parcs.length || c.qtdPagamentos || '—'}</TableCell>
                         <TableCell className="text-center">
-                          {pagas > 0 ? (
-                            <Badge variant="default" className="bg-green-600 hover:bg-green-700">{pagas}</Badge>
-                          ) : '—'}
+                          <div className="flex items-center justify-center gap-1">
+                            {pagas > 0 ? (
+                              <div className="flex -space-x-1">
+                                {[...Array(Math.min(pagas, 5))].map((_, i) => (
+                                  <div key={i} className="w-2 h-2 rounded-full bg-green-500 border border-background" />
+                                ))}
+                                {pagas > 5 && <span className="text-[8px] text-muted-foreground ml-1">+{pagas - 5}</span>}
+                              </div>
+                            ) : (
+                              <div className="w-2 h-2 rounded-full bg-muted" />
+                            )}
+                          </div>
                         </TableCell>
-                        <TableCell className="text-center">
+                        <TableCell>
                           {pendentes > 0 ? (
-                            <Badge variant="secondary">{pendentes}</Badge>
-                          ) : '—'}
+                            <div className="flex items-center gap-1.5 text-destructive font-medium text-xs">
+                              <AlertTriangle className="w-3.5 h-3.5" />
+                              Pendente ({pendentes})
+                            </div>
+                          ) : parcs.length > 0 ? (
+                            <div className="flex items-center gap-1.5 text-green-600 font-medium text-xs">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              Tudo Ok
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground italic">Sem parcelas</span>
+                          )}
                         </TableCell>
-                        <TableCell>{getStatusBadge(c.status)}</TableCell>
                         <TableCell className="text-center">
                           <Button
                             size="sm"
                             variant="outline"
                             onClick={() => setSelectedContrato(c.id)}
+                            className="h-8 px-2 text-xs"
                           >
-                            <Eye className="w-4 h-4 mr-1" />
-                            Parcelas
+                            <Eye className="w-3.5 h-3.5 mr-1" />
+                            Gerir Parcelas
                           </Button>
                         </TableCell>
+
                       </TableRow>
                     );
                   })
@@ -289,13 +315,30 @@ export default function Financeiro() {
               Parcelas — {contratoSelecionado?.numero}
             </DialogTitle>
             {contratoSelecionado && (
-              <div className="text-sm text-muted-foreground space-y-1 mt-2">
-                <p><strong>Empresa:</strong> {contratoSelecionado.empresa}</p>
-                <p><strong>Valor Total:</strong> {contratoSelecionado.valor}</p>
-                <p><strong>Vigência:</strong> {contratoSelecionado.dataInicio} — {contratoSelecionado.dataVencimento}</p>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mt-2">
+                <div className="text-sm text-muted-foreground space-y-1">
+                  <p><strong>Empresa:</strong> {contratoSelecionado.empresa}</p>
+                  <p><strong>Valor Total:</strong> {contratoSelecionado.valor}</p>
+                  <p><strong>Vigência:</strong> {contratoSelecionado.dataInicio} — {contratoSelecionado.dataVencimento}</p>
+                </div>
+                {parcelasContrato.some(p => p.status === 'pendente') && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-green-600 border-green-200 hover:bg-green-50"
+                    onClick={() => {
+                      parcelasContrato.filter(p => p.status === 'pendente').forEach(p => handleBaixaParcela(p.id));
+                      toast({ title: "Contrato Liquidado", description: "Todas as parcelas foram marcadas como pagas." });
+                    }}
+                  >
+                    <CheckCircle2 className="w-4 h-4 mr-2" />
+                    Liquidar Tudo
+                  </Button>
+                )}
               </div>
             )}
           </DialogHeader>
+
 
           {parcelasContrato.length === 0 ? (
             <div className="py-8 text-center text-muted-foreground">
@@ -304,55 +347,60 @@ export default function Financeiro() {
               <p className="text-xs mt-1">As parcelas são geradas ao salvar o contrato com modelo de cobrança.</p>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-center">Nº</TableHead>
-                  <TableHead className="text-right">Valor</TableHead>
-                  <TableHead>Vencimento</TableHead>
-                  <TableHead className="text-center">Status</TableHead>
-                  <TableHead className="text-center">Ação</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {parcelasContrato.map(p => (
-                  <TableRow key={p.id}>
-                    <TableCell className="text-center font-medium">{p.numero}</TableCell>
-                    <TableCell className="text-right font-mono">{p.valor}</TableCell>
-                    <TableCell>{p.dataVencimento}</TableCell>
-                    <TableCell className="text-center">
-                      {p.status === 'pago' || p.quitado ? (
-                        <Badge variant="default" className="bg-green-600 hover:bg-green-700">Pago</Badge>
-                      ) : (
-                        <Badge variant="secondary">Pendente</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {p.status === 'pago' || p.quitado ? (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => handleEstornarParcela(p.id)}
-                        >
-                          Estornar
-                        </Button>
+            <div className="grid grid-cols-1 gap-2 mt-4">
+              {parcelasContrato.map(p => {
+                const isPago = p.status === 'pago' || p.quitado;
+                return (
+                  <div
+                    key={p.id}
+                    className={cn(
+                      "flex items-center justify-between p-3 rounded-lg border transition-colors",
+                      isPago ? "bg-green-50/50 border-green-100" : "bg-card border-border"
+                    )}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className={cn(
+                        "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold",
+                        isPago ? "bg-green-100 text-green-700" : "bg-muted text-muted-foreground"
+                      )}>
+                        {p.numero}
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold font-mono">{p.valor}</p>
+                        <p className="text-[10px] text-muted-foreground">Vencimento: {p.dataVencimento}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {isPago ? (
+                        <>
+                          <Badge variant="default" className="bg-green-600 h-6">PAGO</Badge>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 text-[10px] text-destructive hover:bg-destructive/5"
+                            onClick={() => handleEstornarParcela(p.id)}
+                          >
+                            Estornar
+                          </Button>
+                        </>
                       ) : (
                         <Button
                           size="sm"
                           variant="default"
-                          className="bg-green-600 hover:bg-green-700"
+                          className="bg-green-600 hover:bg-green-700 h-8"
                           onClick={() => handleBaixaParcela(p.id)}
                         >
-                          <CheckCircle2 className="w-4 h-4 mr-1" />
+                          <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
                           Dar Baixa
                         </Button>
                       )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
           )}
         </DialogContent>
       </Dialog>
