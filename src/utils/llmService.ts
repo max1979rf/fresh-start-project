@@ -117,6 +117,32 @@ export async function callLlmApi(
             return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
         }
 
+        // GPTMaker — uses v2/agent/{agentId}/conversation endpoint
+        if (config.llmProvider === 'gptmaker') {
+            const agentId = (config as any).gptMakerAgentId;
+            const apiKey = (config as any).gptMakerApiKey || config.llmApiKey;
+            if (!agentId || !apiKey) return null;
+
+            const baseUrl = config.llmBaseUrl || 'https://api.gptmaker.ai';
+            const lastUserMsg = messages.filter(m => m.role === 'user').pop();
+            const prompt = lastUserMsg?.content || '';
+
+            const resp = await fetch(`${baseUrl}/v2/agent/${agentId}/conversation`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    contextId: `legal-whisperer-${Date.now()}`,
+                    prompt: `${finalSystemPrompt}\n\n${prompt}`,
+                }),
+            });
+            if (!resp.ok) return null;
+            const data = await resp.json();
+            return data.message || null;
+        }
+
         // OpenAI-compatible (OpenAI, DeepSeek, Groq, Mistral, xAI, custom…)
         const baseUrl = config.llmBaseUrl || 'https://api.openai.com/v1';
         const resp = await fetch(`${baseUrl}/chat/completions`, {

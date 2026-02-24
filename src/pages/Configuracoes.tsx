@@ -223,6 +223,8 @@ export default function Configuracoes() {
   const [llmTopP, setLlmTopP] = useState(appConfig.llmTopP ?? 1);
   const [llmFrequencyPenalty, setLlmFrequencyPenalty] = useState(appConfig.llmFrequencyPenalty ?? 0);
   const [llmPresencePenalty, setLlmPresencePenalty] = useState(appConfig.llmPresencePenalty ?? 0);
+  const [gptMakerTesting, setGptMakerTesting] = useState(false);
+  const [gptMakerTestResult, setGptMakerTestResult] = useState<{ ok: boolean; message: string } | null>(null);
 
   // --- Sync local state once Supabase data is loaded ---
   // useState() captures values at component mount — BEFORE the async fetch from Supabase
@@ -449,6 +451,45 @@ export default function Configuracoes() {
       setLlmTesting(false);
     }
   }, [llmApiKey, llmProvider, llmModel, llmBaseUrl, addLog, currentUser, appConfig, setAppConfig]);
+
+  // --- Test GPTMaker Connection ---
+  const handleTestGptMaker = useCallback(async () => {
+    if (!gptMakerAgentId.trim() || !gptMakerApiKey.trim()) {
+      setGptMakerTestResult({ ok: false, message: "Preencha o ID do Agente e a API Key." });
+      return;
+    }
+    setGptMakerTesting(true);
+    setGptMakerTestResult(null);
+    try {
+      const baseUrl = webhookGptMaker.trim() || 'https://api.gptmaker.ai';
+      const resp = await fetch(`${baseUrl}/v2/agent/${gptMakerAgentId.trim()}/conversation`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${gptMakerApiKey.trim()}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contextId: `test-${Date.now()}`,
+          prompt: 'Olá, este é um teste de conexão. Responda brevemente.',
+        }),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        setGptMakerTestResult({ ok: true, message: data.message || 'Conexão bem-sucedida!' });
+        addLog(currentUser!.id, currentUser!.nome, "GPTMaker testado", "Conexão OK");
+        toast({ title: "✅ GPTMaker conectado!", description: "O agente respondeu com sucesso." });
+      } else {
+        const body = await resp.text();
+        setGptMakerTestResult({ ok: false, message: `Erro ${resp.status}: ${body.substring(0, 150)}` });
+        toast({ title: "❌ Erro na conexão", description: `Status ${resp.status}`, variant: "destructive" });
+      }
+    } catch (err) {
+      setGptMakerTestResult({ ok: false, message: `Erro de rede: ${err instanceof Error ? err.message : 'desconhecido'}` });
+      toast({ title: "❌ Falha na conexão", description: "Verifique o endpoint e as credenciais.", variant: "destructive" });
+    } finally {
+      setGptMakerTesting(false);
+    }
+  }, [gptMakerAgentId, gptMakerApiKey, webhookGptMaker, addLog, currentUser]);
 
   // --- Generate API Key ---
   const handleGenerateApiKey = () => {
@@ -1197,6 +1238,29 @@ export default function Configuracoes() {
                 <p className="text-[10px] text-muted-foreground/70">Chave de autenticação da API do GPTMaker</p>
               </div>
             </div>
+            {/* Test GPTMaker button */}
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                onClick={handleTestGptMaker}
+                disabled={gptMakerTesting || !gptMakerAgentId.trim() || !gptMakerApiKey.trim()}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-purple-600 text-white text-xs font-medium hover:bg-purple-700 disabled:opacity-50 transition-colors"
+              >
+                {gptMakerTesting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                {gptMakerTesting ? 'Testando...' : 'Testar Conexão GPTMaker'}
+              </button>
+              {gptMakerTestResult && (
+                <span className={`text-xs font-medium flex items-center gap-1 ${gptMakerTestResult.ok ? 'text-green-600' : 'text-destructive'}`}>
+                  {gptMakerTestResult.ok ? <Check className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
+                  {gptMakerTestResult.ok ? 'Conectado!' : 'Falhou'}
+                </span>
+              )}
+            </div>
+            {gptMakerTestResult?.message && (
+              <div className={`p-3 rounded-lg text-xs mt-2 ${gptMakerTestResult.ok ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
+                <p className="font-medium mb-1">{gptMakerTestResult.ok ? '✅ Resposta do Agente:' : '❌ Detalhes do Erro:'}</p>
+                <p className="whitespace-pre-wrap">{gptMakerTestResult.message}</p>
+              </div>
+            )}
           </div>
 
           {/* n8n */}

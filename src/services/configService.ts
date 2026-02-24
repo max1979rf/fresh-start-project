@@ -28,6 +28,7 @@ import type { AppConfig } from '@/types';
 export async function saveConfiguracoes(
   config: AppConfig,
 ): Promise<{ error: string | null }> {
+  // Save structured fields to `configuracoes` table
   const { error } = await supabase
     .from('configuracoes')
     .upsert(
@@ -68,6 +69,22 @@ export async function saveConfiguracoes(
     return { error: error.message };
   }
 
+  // Save extra fields (gptMakerAgentId, gptMakerApiKey) to `app_config` JSONB
+  const extraConfig = {
+    gptMakerAgentId: config.gptMakerAgentId,
+    gptMakerApiKey: config.gptMakerApiKey,
+  };
+  await supabase
+    .from('app_config')
+    .upsert(
+      {
+        id: 'extra',
+        config: extraConfig as any,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'id' },
+    );
+
   return { error: null };
 }
 
@@ -78,18 +95,20 @@ export async function saveConfiguracoes(
  * Retorna null se o registro não existir.
  */
 export async function loadConfiguracoes(): Promise<AppConfig | null> {
-  const { data, error } = await supabase
-    .from('configuracoes')
-    .select('*')
-    .eq('id', 'default')
-    .single();
+  const [mainResult, extraResult] = await Promise.all([
+    supabase.from('configuracoes').select('*').eq('id', 'default').single(),
+    supabase.from('app_config').select('*').eq('id', 'extra').single(),
+  ]);
 
-  if (error) {
-    if (error.code !== 'PGRST116') {
-      console.error('[configService] loadConfiguracoes failed:', error.message);
+  if (mainResult.error) {
+    if (mainResult.error.code !== 'PGRST116') {
+      console.error('[configService] loadConfiguracoes failed:', mainResult.error.message);
     }
     return null;
   }
+
+  const data = mainResult.data;
+  const extra = (extraResult.data?.config as any) || {};
 
   if (data) {
     return {
@@ -118,6 +137,8 @@ export async function loadConfiguracoes(): Promise<AppConfig | null> {
       apiKey: data.api_key ?? undefined,
       empresaId: data.empresa_id ?? undefined,
       apiKeyCreatedAt: data.api_key_created_at ?? undefined,
+      gptMakerAgentId: extra.gptMakerAgentId ?? undefined,
+      gptMakerApiKey: extra.gptMakerApiKey ?? undefined,
     };
   }
 
