@@ -146,8 +146,4 @@
     box-shadow: var(--shadow-md);
     transform: translateY(-2px);
   }
-
-  .no-scroll {
-    overflow: hidden !important;
-  }
 }

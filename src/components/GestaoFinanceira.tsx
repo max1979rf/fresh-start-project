@@ -19,12 +19,9 @@ import {
 } from "@/components/ui/table";
 import {
   CheckCircle2, Clock, AlertTriangle, Printer, Save,
-  DollarSign, Percent, XCircle, Undo2, X, Maximize2, Minimize2, ChevronDown, MoreHorizontal
+  DollarSign, Percent, XCircle, Undo2,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { motion, AnimatePresence } from "framer-motion";
-import { createPortal } from "react-dom";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 // ─── Helpers ────────────────────────────────────────────────
 function parseCurrency(val: any): number {
@@ -114,18 +111,6 @@ export default function GestaoFinanceira({ contrato, open, onClose }: GestaoFina
 
   const parcelasPagas = useMemo(() =>
     parcelasList.filter(p => p.quitado), [parcelasList]);
-
-  const [isMinimized, setIsMinimized] = useState(false);
-
-  // Lock body scroll when open
-  React.useEffect(() => {
-    if (open && !isMinimized) {
-      document.body.classList.add("no-scroll");
-    } else {
-      document.body.classList.remove("no-scroll");
-    }
-    return () => document.body.classList.remove("no-scroll");
-  }, [open, isMinimized]);
 
   // Sync multas based on contract's multaPercentual for overdue installments
   React.useEffect(() => {
@@ -373,312 +358,166 @@ export default function GestaoFinanceira({ contrato, open, onClose }: GestaoFina
     );
   };
 
-  // ─── Render mobile card ───────────────────────────────────
-  const renderParcelaCard = (p: Parcela) => {
-    const ex = getExtra(p.id);
-    const base = parseCurrency(p.valor);
-    const jurosVal = base * ex.juros / 100;
-    const total = base + ex.multa + jurosVal;
-    const venc = parseDateForCompare(p.dataVencimento);
-    const isVencida = venc && venc < today && !p.quitado;
+  return (
+    <Dialog open={open} onOpenChange={() => onClose()}>
+      <DialogContent className="max-w-none w-screen h-screen m-0 rounded-none overflow-y-auto flex flex-col p-6">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <DollarSign className="w-5 h-5 text-primary" />
+            Gestão Financeira — {contrato.numero}
+          </DialogTitle>
+        </DialogHeader>
 
-    return (
-      <Card key={p.id} className={cn("overflow-hidden border-l-4",
-        p.quitado ? "border-l-emerald-500" : isVencida ? "border-l-destructive" : "border-l-amber-500")}>
-        <CardContent className="p-4 space-y-3">
-          <div className="flex justify-between items-start">
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-lg text-muted-foreground">#{p.numero}</span>
-              <Badge variant={p.quitado ? "outline" : isVencida ? "destructive" : "outline"}
-                className={cn(p.quitado && "text-emerald-700 bg-emerald-50 border-emerald-200",
-                  !p.quitado && !isVencida && "text-amber-700 bg-amber-50 border-amber-200")}>
-                {p.quitado ? "Pago" : isVencida ? "Vencida" : "A Vencer"}
-              </Badge>
-            </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => p.quitado ? handleEstorno(p.id) : handleBaixa(p.id)}>
-                  {p.quitado ? <><Undo2 className="w-4 h-4 mr-2" /> Estornar</> : <><CheckCircle2 className="w-4 h-4 mr-2" /> Liquidar</>}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-5 pt-2">
+          {/* Info do contrato */}
+          <div className="bg-muted/50 p-3 rounded-lg flex flex-wrap gap-4 justify-between items-center text-sm">
             <div>
-              <p className="text-[10px] uppercase font-bold text-muted-foreground">Valor / Vencimento</p>
-              <p className="font-semibold text-sm">{formatCurrency(base)}</p>
-              <p className={cn("text-xs", isVencida && "text-destructive font-bold")}>{formatDateBR(p.dataVencimento)}</p>
+              <p className="text-[10px] uppercase font-bold text-muted-foreground">Empresa</p>
+              <p className="font-semibold">{contrato.empresa}</p>
             </div>
-            <div className="text-right">
-              <p className="text-[10px] uppercase font-bold text-muted-foreground">Total</p>
-              <p className="font-bold text-sm text-primary">{formatCurrency(total)}</p>
+            <div>
+              <p className="text-[10px] uppercase font-bold text-muted-foreground">Valor Contrato</p>
+              <p className="font-semibold font-mono">{contrato.valor}</p>
             </div>
-          </div>
-
-          <Separator className="opacity-50" />
-
-          <div className="grid grid-cols-2 gap-3 pt-1">
-            <div className="space-y-1">
-              <Label className="text-[10px] uppercase">Multa (R$)</Label>
-              <Input
-                type="text"
-                disabled={p.quitado}
-                value={ex.multa > 0 ? ex.multa.toString().replace(".", ",") : ""}
-                onChange={e => setParcelaExtra(p.id, "multa", parseCurrency(e.target.value))}
-                className="h-7 text-xs"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-[10px] uppercase">Juros (%)</Label>
-              <div className="flex items-center gap-1">
-                <Input
-                  type="text"
-                  disabled={p.quitado}
-                  value={ex.juros > 0 ? ex.juros.toString().replace(".", ",") : ""}
-                  onChange={e => setParcelaExtra(p.id, "juros", parseFloat(e.target.value.replace(",", ".")) || 0)}
-                  className="h-7 text-xs"
-                />
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  };
-
-  if (!open) return null;
-
-  const content = (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={isMinimized ? {
-          opacity: 1,
-          scale: 0.3,
-          x: "calc(50vw - 120px)",
-          y: "calc(50vh - 60px)",
-          borderRadius: "1rem"
-        } : {
-          opacity: 1,
-          scale: 1,
-          x: 0,
-          y: 0,
-          borderRadius: 0
-        }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        transition={{ type: "spring", damping: 25, stiffness: 200 }}
-        className={cn(
-          "fixed top-0 left-0 w-screen h-screen z-[100] bg-background flex flex-col shadow-2xl",
-          isMinimized && "cursor-pointer overflow-hidden border-4 border-primary/20 hover:border-primary/50"
-        )}
-        onClick={() => isMinimized && setIsMinimized(false)}
-      >
-        {/* HEADER FIXO */}
-        <header className="shrink-0 bg-card border-b z-20">
-          <div className="flex items-center justify-between p-4 border-b">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                <DollarSign className="w-6 h-6 text-primary" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold font-playfair flex items-center gap-2 leading-tight">
-                  Gestão Financeira <span className="text-muted-foreground font-normal text-sm font-sans">— {contrato.numero}</span>
-                </h1>
-                <p className="text-xs text-muted-foreground truncate max-w-[400px]">
-                  {contrato.empresa}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="rounded-full"
-                onClick={(e) => { e.stopPropagation(); setIsMinimized(!isMinimized); }}
-                title={isMinimized ? "Expandir" : "Minimizar"}
-              >
-                {isMinimized ? <Maximize2 className="w-5 h-5" /> : <Minimize2 className="w-5 h-5" />}
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="rounded-full hover:bg-destructive/10 hover:text-destructive"
-                onClick={(e) => { e.stopPropagation(); onClose(); }}
-                title="Fechar"
-              >
-                <X className="w-5 h-5" />
-              </Button>
+            <div>
+              <p className="text-[10px] uppercase font-bold text-muted-foreground">Vigência</p>
+              <p className="font-semibold">{formatDateBR(contrato.dataInicio)} → {formatDateBR(contrato.dataVencimento)}</p>
             </div>
           </div>
 
-          {!isMinimized && (
-            <div className="p-4 space-y-4 bg-muted/20">
-              <div className="flex flex-wrap gap-4 items-end">
-                <Card className="flex-1 min-w-[300px] border-dashed">
-                  <CardContent className="p-3">
-                    <p className="text-[10px] uppercase font-bold text-muted-foreground mb-2 flex items-center gap-1">
-                      <AlertTriangle className="w-3 h-3" /> Aplicar em todas as parcelas pendentes
-                    </p>
-                    <div className="flex flex-wrap gap-3 items-end">
-                      <div className="space-y-1">
-                        <Label className="text-[10px] uppercase">Multa (R$)</Label>
-                        <div className="flex gap-2">
-                          <Input
-                            placeholder="Ex: 50,00"
-                            value={multaGlobal}
-                            onChange={e => setMultaGlobal(e.target.value)}
-                            className="w-28 h-8 text-sm"
-                          />
-                          <Button size="sm" variant="outline" onClick={handleAplicarMultaGlobal} className="h-8">
-                            Aplicar
-                          </Button>
-                        </div>
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-[10px] uppercase font-semibold">Juros (%)</Label>
-                        <div className="flex gap-2">
-                          <Input
-                            placeholder="Ex: 2,00"
-                            value={jurosGlobal}
-                            onChange={e => setJurosGlobal(e.target.value)}
-                            className="w-24 h-8 text-sm"
-                          />
-                          <Button size="sm" variant="outline" onClick={handleAplicarJurosGlobal} className="h-8">
-                            Aplicar
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+          {/* Summary cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <MiniCard label="Total Prestações" value={parcelasList.length.toString()} icon={<DollarSign className="w-4 h-4" />} />
+            <MiniCard label="Pagas" value={parcelasPagas.length.toString()} icon={<CheckCircle2 className="w-4 h-4 text-emerald-600" />} />
+            <MiniCard label="Vencidas" value={parcelasVencidas.length.toString()} icon={<XCircle className="w-4 h-4 text-destructive" />} accent={parcelasVencidas.length > 0 ? "destructive" : undefined} />
+            <MiniCard label="A Vencer" value={parcelasAVencer.length.toString()} icon={<Clock className="w-4 h-4 text-amber-500" />} />
+            <MiniCard label="Total Multas" value={formatCurrency(resumo.totalMultas)} icon={<AlertTriangle className="w-4 h-4 text-orange-500" />} />
+            <MiniCard label="Total Geral" value={formatCurrency(resumo.total)} icon={<DollarSign className="w-4 h-4 text-primary" />} accent="primary" />
+          </div>
 
-                {/* Status Cards - Desktop Only */}
-                <div className="hidden lg:grid grid-cols-4 gap-2 flex-[1.5]">
-                  <MiniCard label="Total" value={parcelasList.length.toString()} icon={<DollarSign className="w-3 h-3" />} />
-                  <MiniCard label="Pagas" value={parcelasPagas.length.toString()} icon={<CheckCircle2 className="w-3 h-3 text-emerald-600" />} />
-                  <MiniCard label="Vencidas" value={parcelasVencidas.length.toString()} icon={<XCircle className="w-3 h-3 text-destructive" />} accent={parcelasVencidas.length > 0 ? "destructive" : undefined} />
-                  <MiniCard label="A Vencer" value={parcelasAVencer.length.toString()} icon={<Clock className="w-3 h-3 text-amber-500" />} />
+          {/* Aplicar multa/juros global */}
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-xs uppercase font-bold text-muted-foreground mb-3">Aplicar em todas as parcelas pendentes</p>
+              <div className="flex flex-wrap gap-3 items-end">
+                <div className="space-y-1">
+                  <Label className="text-xs">Multa (R$)</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Ex: 50,00"
+                      value={multaGlobal}
+                      onChange={e => setMultaGlobal(e.target.value)}
+                      className="w-32 h-8 text-sm"
+                    />
+                    <Button size="sm" variant="outline" onClick={handleAplicarMultaGlobal} className="h-8">
+                      <AlertTriangle className="w-3 h-3 mr-1" /> Aplicar Multa
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Taxa de Juros (%)</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Ex: 2,00"
+                      value={jurosGlobal}
+                      onChange={e => setJurosGlobal(e.target.value)}
+                      className="w-32 h-8 text-sm"
+                    />
+                    <Button size="sm" variant="outline" onClick={handleAplicarJurosGlobal} className="h-8">
+                      <Percent className="w-3 h-3 mr-1" /> Aplicar Juros
+                    </Button>
+                  </div>
                 </div>
               </div>
+            </CardContent>
+          </Card>
 
-              <Tabs defaultValue="todas" className="w-full">
-                <TabsList className="grid w-full grid-cols-4 lg:max-w-md h-9">
-                  <TabsTrigger value="todas" className="text-xs">Todas</TabsTrigger>
-                  <TabsTrigger value="vencidas" className="text-xs text-destructive">Vencidas</TabsTrigger>
-                  <TabsTrigger value="avencer" className="text-xs">A Vencer</TabsTrigger>
-                  <TabsTrigger value="pagas" className="text-xs text-emerald-600">Pagas</TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </div>
-          )}
-        </header>
+          {/* Tabs */}
+          <Tabs defaultValue="todas" className="w-full">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="todas">Todas ({parcelasList.length})</TabsTrigger>
+              <TabsTrigger value="vencidas" className="text-destructive">Vencidas ({parcelasVencidas.length})</TabsTrigger>
+              <TabsTrigger value="avencer">A Vencer ({parcelasAVencer.length})</TabsTrigger>
+              <TabsTrigger value="pagas">Pagas ({parcelasPagas.length})</TabsTrigger>
+            </TabsList>
 
-        {/* CORPO SCROLLÁVEL */}
-        <main className={cn(
-          "flex-1 overflow-y-auto p-4 lg:p-6 bg-muted/5",
-          isMinimized && "hidden"
-        )}>
-          <Tabs defaultValue="todas">
             {(["todas", "vencidas", "avencer", "pagas"] as const).map(tab => {
               const list = tab === "todas" ? parcelasList
                 : tab === "vencidas" ? parcelasVencidas
                   : tab === "avencer" ? parcelasAVencer
                     : parcelasPagas;
               return (
-                <TabsContent key={tab} value={tab} className="m-0">
+                <TabsContent key={tab} value={tab}>
                   {list.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-20 text-muted-foreground animate-in fade-in zoom-in duration-300">
-                      <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
-                        <Clock className="w-8 h-8 opacity-20" />
-                      </div>
-                      <p className="italic text-sm">Nenhuma parcela nesta categoria.</p>
-                    </div>
+                    <p className="text-center py-8 text-muted-foreground italic text-sm">Nenhuma parcela nesta categoria.</p>
                   ) : (
-                    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                      {/* Desktop Table */}
-                      <div className="hidden md:block bg-card border rounded-xl overflow-hidden shadow-sm">
-                        <Table>
-                          <TableHeader className="bg-muted/50">
-                            <TableRow>
-                              <TableHead className="w-16 font-bold text-[10px] uppercase">Nº</TableHead>
-                              <TableHead className="font-bold text-[10px] uppercase">Valor Base</TableHead>
-                              <TableHead className="font-bold text-[10px] uppercase">Vencimento</TableHead>
-                              <TableHead className="font-bold text-[10px] uppercase">Multas (R$)</TableHead>
-                              <TableHead className="font-bold text-[10px] uppercase">Juros (%)</TableHead>
-                              <TableHead className="font-bold text-[10px] uppercase">Total Parcela</TableHead>
-                              <TableHead className="font-bold text-[10px] uppercase">Status</TableHead>
-                              <TableHead className="w-32 text-right font-bold text-[10px] uppercase">Ação</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {list.map(p => renderParcelaRow(p))}
-                          </TableBody>
-                        </Table>
-                      </div>
-
-                      {/* Mobile Cards */}
-                      <div className="grid grid-cols-1 gap-3 md:hidden">
-                        {list.map(p => renderParcelaCard(p))}
-                      </div>
+                    <div className="border rounded-lg overflow-auto max-h-[40vh]">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-12">Nº</TableHead>
+                            <TableHead>Valor</TableHead>
+                            <TableHead>Vencimento</TableHead>
+                            <TableHead>Multa</TableHead>
+                            <TableHead>Juros</TableHead>
+                            <TableHead>Total</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="w-28">Ação</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {list.map(p => renderParcelaRow(p))}
+                        </TableBody>
+                      </Table>
                     </div>
                   )}
                 </TabsContent>
               );
             })}
           </Tabs>
-        </main>
 
-        {/* RODAPÉ FIXO */}
-        <footer className={cn(
-          "shrink-0 bg-card border-t p-4 lg:p-6 shadow-[0_-10px_30px_rgba(0,0,0,0.05)]",
-          isMinimized && "hidden"
-        )}>
-          <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 w-full md:w-auto">
-              <div className="space-y-1">
-                <p className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
-                  <DollarSign className="w-3 h-3" /> Subtotal Prestações
-                </p>
-                <p className="font-mono font-bold text-lg">{formatCurrency(resumo.totalPrestacoes)}</p>
+          {/* Resumo financeiro */}
+          <Card>
+            <CardContent className="p-4 grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+              <div>
+                <p className="text-[10px] uppercase font-bold text-muted-foreground">Valor Prestações</p>
+                <p className="font-mono font-bold">{formatCurrency(resumo.totalPrestacoes)}</p>
               </div>
-              <div className="space-y-1">
-                <p className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3 text-emerald-500" /> Total Pago
-                </p>
-                <p className="font-mono font-bold text-lg text-emerald-600">{formatCurrency(resumo.totalPago)}</p>
+              <div>
+                <p className="text-[10px] uppercase font-bold text-muted-foreground">+ Multas</p>
+                <p className="font-mono font-bold text-orange-600">{formatCurrency(resumo.totalMultas)}</p>
               </div>
-              <div className="space-y-1">
-                <p className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1 text-destructive">
-                  <Clock className="w-3 h-3" /> Total Pendente
-                </p>
-                <p className="font-mono font-bold text-lg text-destructive">{formatCurrency(resumo.totalPendente)}</p>
+              <div>
+                <p className="text-[10px] uppercase font-bold text-muted-foreground">+ Juros</p>
+                <p className="font-mono font-bold text-amber-600">{formatCurrency(resumo.totalJuros)}</p>
               </div>
-              <div className="space-y-1 bg-primary/5 p-2 px-4 rounded-lg border border-primary/10">
-                <p className="text-[10px] uppercase font-bold text-primary flex items-center gap-1">
-                  Total Geral (+Multas/Juros)
-                </p>
-                <p className="font-mono font-bold text-2xl text-primary">{formatCurrency(resumo.total)}</p>
+              <div>
+                <p className="text-[10px] uppercase font-bold text-muted-foreground">Total Pago</p>
+                <p className="font-mono font-bold text-emerald-600">{formatCurrency(resumo.totalPago)}</p>
               </div>
-            </div>
+              <div>
+                <p className="text-[10px] uppercase font-bold text-muted-foreground">Total Pendente</p>
+                <p className="font-mono font-bold text-destructive">{formatCurrency(resumo.totalPendente)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase font-bold text-muted-foreground">Total Geral (Prestação + Multa + Juros)</p>
+                <p className="font-mono font-bold text-lg text-primary">{formatCurrency(resumo.total)}</p>
+              </div>
+            </CardContent>
+          </Card>
 
-            <div className="flex gap-3 w-full md:w-auto">
-              <Button variant="outline" onClick={handlePrintReport} className="flex-1 md:flex-none border-primary/20 hover:bg-primary/5">
-                <Printer className="w-4 h-4 mr-2" /> Gerar Relatório Completo
-              </Button>
-            </div>
+          <Separator />
+
+          {/* Action buttons */}
+          <div className="flex justify-start">
+            <Button variant="outline" onClick={handlePrintReport}>
+              <Printer className="w-4 h-4 mr-2" /> Relatório
+            </Button>
           </div>
-        </footer>
-      </motion.div>
-    </AnimatePresence>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
-
-  return createPortal(content, document.body);
 }
 
 // ─── MiniCard ───────────────────────────────────────────────
