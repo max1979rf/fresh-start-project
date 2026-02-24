@@ -6,7 +6,7 @@ import { toast } from "@/hooks/use-toast";
 import {
   Settings, Upload, Save, Check, AlertCircle, X, Image, Link2, Bell,
   Trash2, Brain, Key, Copy, RefreshCw, CheckCircle2, Shield, Code, Loader2,
-  Mail, Power, ChevronDown, ChevronUp, Coins, Cloud, CloudOff
+  Mail, Power, ChevronDown, ChevronUp, Coins, Cloud, CloudOff, Bot
 } from "lucide-react";
 import { useData } from "../contexts/DataContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -201,6 +201,8 @@ export default function Configuracoes() {
   // --- Webhooks ---
   const [webhookGptMaker, setWebhookGptMaker] = useState(appConfig.webhookGptMaker || "");
   const [webhookN8n, setWebhookN8n] = useState(appConfig.webhookN8n || "");
+  const [gptMakerAgentId, setGptMakerAgentId] = useState(appConfig.gptMakerAgentId || "");
+  const [gptMakerApiKey, setGptMakerApiKey] = useState(appConfig.gptMakerApiKey || "");
 
   // --- LLM (RF01) ---
   const [llmProvider, setLlmProvider] = useState<'openai' | 'anthropic' | 'google' | 'meta' | 'mistral' | 'cohere' | 'deepseek' | 'groq' | 'perplexity' | 'xai' | 'gptmaker' | 'custom'>(appConfig.llmProvider || "openai");
@@ -237,6 +239,8 @@ export default function Configuracoes() {
     setEmailsSetor(appConfig.emailsAlertaSetor || {});
     setWebhookGptMaker(appConfig.webhookGptMaker || "");
     setWebhookN8n(appConfig.webhookN8n || "");
+    setGptMakerAgentId(appConfig.gptMakerAgentId || "");
+    setGptMakerApiKey(appConfig.gptMakerApiKey || "");
     if (appConfig.llmProvider) setLlmProvider(appConfig.llmProvider);
     setLlmApiKey(appConfig.llmApiKey || "");
     setLlmModel(appConfig.llmModel || "gpt-4o-mini");
@@ -279,6 +283,8 @@ export default function Configuracoes() {
         emailsAlertaSetor:    emailsSetor,
         webhookGptMaker:      webhookGptMaker.trim()   || undefined,
         webhookN8n:           webhookN8n.trim()        || undefined,
+        gptMakerAgentId:      gptMakerAgentId.trim()   || undefined,
+        gptMakerApiKey:       gptMakerApiKey.trim()    || undefined,
         llmProvider:          llmProvider as AppConfig['llmProvider'],
         llmApiKey:            llmApiKey.trim()         || undefined,
         llmModel:             llmModel.trim()          || undefined,
@@ -304,7 +310,7 @@ export default function Configuracoes() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     nomeEmpresa, alertaEmailAtivo, alertasAtivos, emailsSetor,
-    webhookGptMaker, webhookN8n,
+    webhookGptMaker, webhookN8n, gptMakerAgentId, gptMakerApiKey,
     llmProvider, llmApiKey, llmModel, llmBaseUrl, llmStatus,
     llmCustomPrompt, llmKnowledgeBase, llmTone, llmSpecialization,
     llmExamples, llmTemperature, llmTopP, llmFrequencyPenalty, llmPresencePenalty,
@@ -476,6 +482,8 @@ export default function Configuracoes() {
     setAppConfig({
       webhookGptMaker: webhookGptMaker.trim() || undefined,
       webhookN8n: webhookN8n.trim() || undefined,
+      gptMakerAgentId: gptMakerAgentId.trim() || undefined,
+      gptMakerApiKey: gptMakerApiKey.trim() || undefined,
       nomeEmpresa: nomeEmpresa.trim() || undefined,
       alertaEmailAtivo,
       alertasAtivos,
@@ -1160,21 +1168,63 @@ export default function Configuracoes() {
             </div>
             <div>
               <h3 className="text-sm font-semibold text-foreground">Integrações — Webhooks</h3>
-              <p className="text-xs text-muted-foreground">URLs para análise automática de contratos</p>
+              <p className="text-xs text-muted-foreground">Endpoints e credenciais para integração com GPTMaker e n8n</p>
             </div>
           </div>
 
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Webhook GPTMaker</label>
-              <input value={webhookGptMaker} onChange={(e) => setWebhookGptMaker(e.target.value)} placeholder="https://api.gptmaker.ai/webhook/..."
-                className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring font-mono text-xs" />
+          {/* GPTMaker */}
+          <div className="space-y-3 p-4 rounded-lg border border-border/50 bg-muted/10">
+            <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide flex items-center gap-2">
+              <Bot className="w-3.5 h-3.5 text-primary" /> GPTMaker
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1.5 md:col-span-2">
+                <label className="text-xs font-medium text-muted-foreground">Endpoint (URL do Webhook)</label>
+                <input value={webhookGptMaker} onChange={(e) => setWebhookGptMaker(e.target.value)} placeholder="https://api.gptmaker.ai/v1/chat/completions"
+                  className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring font-mono text-xs" />
+                <p className="text-[10px] text-muted-foreground/70">URL completa do endpoint do GPTMaker (ex: https://api.gptmaker.ai/v1/chat/completions)</p>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">ID do Agente</label>
+                <input value={gptMakerAgentId} onChange={(e) => setGptMakerAgentId(e.target.value)} placeholder="agent_xxxxxxxx"
+                  className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring font-mono text-xs" />
+                <p className="text-[10px] text-muted-foreground/70">Identificador único do agente no GPTMaker</p>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Chave de API (API Key)</label>
+                <input value={gptMakerApiKey} onChange={(e) => setGptMakerApiKey(e.target.value)} placeholder="gptm_xxxxxxxxxxxxxxxx" type="password"
+                  className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring font-mono text-xs" />
+                <p className="text-[10px] text-muted-foreground/70">Chave de autenticação da API do GPTMaker</p>
+              </div>
             </div>
+          </div>
+
+          {/* n8n */}
+          <div className="space-y-3 p-4 rounded-lg border border-border/50 bg-muted/10">
+            <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide flex items-center gap-2">
+              <Code className="w-3.5 h-3.5 text-primary" /> n8n — Automação
+            </h4>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Webhook n8n</label>
-              <input value={webhookN8n} onChange={(e) => setWebhookN8n(e.target.value)} placeholder="https://n8n.exemplo.com/webhook/..."
+              <label className="text-xs font-medium text-muted-foreground">Webhook n8n (URL)</label>
+              <input value={webhookN8n} onChange={(e) => setWebhookN8n(e.target.value)} placeholder="https://n8n.exemplo.com/webhook/contrato-analise"
                 className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring font-mono text-xs" />
+              <p className="text-[10px] text-muted-foreground/70">URL do webhook configurado no n8n para receber dados de contratos</p>
             </div>
+          </div>
+
+          {/* Save button */}
+          <div className="flex items-center gap-3 pt-2">
+            <button
+              onClick={handleSaveAll}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 shadow-sm transition-all active:scale-[0.98]"
+            >
+              <Save className="w-4 h-4" /> Salvar Integrações
+            </button>
+            {saved && (
+              <span className="flex items-center gap-1 text-xs text-success font-medium">
+                <Check className="w-3.5 h-3.5" /> Salvo!
+              </span>
+            )}
           </div>
         </div>
       )}
