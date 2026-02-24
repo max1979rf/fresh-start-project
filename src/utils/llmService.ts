@@ -290,7 +290,13 @@ REGRAS CRÍTICAS:
    - Identifique riscos financeiros: ausência de reajuste, multas desproporcionais, etc.
    - Array vazio se nenhuma vulnerabilidade encontrada.
 
-8. JSON APENAS: Não inclua nenhum texto fora do objeto JSON.`;
+8. CONTRATOS DE LOCAÇÃO:
+   - Se o contrato for do tipo "Locação" (especialmente Locação de Imóvel):
+     * A REGRAL GERAL é que o valorTotal seja o valor que consta na cláusula "Do Valor" (geralmente o valor global do contrato).
+     * PARA LOCAÇÃO, o "valor da prestação" (valorMensalidade) deve ser igual ao valor global total se não houver divisão explícita.
+     * PARA LOCAÇÃO DE IMÓVEL, identifique o contratante (locatário) e o contratada (locador).
+
+9. JSON APENAS: Não inclua nenhum texto fora do objeto JSON.`;
 
 /** Adds N months to an ISO date string (YYYY-MM-DD) and returns the result as YYYY-MM-DD. */
 function addMonthsToIso(isoDate: string, months: number): string {

@@ -363,6 +363,13 @@ export default function Contratos() {
             autoFilled = true;
           }
 
+          // REGRA DE LOCAÇÃO: Para Locação de Imóvel, o campo Empresa/Contrato deve ser o CONTRATANTE
+          if (llmResult.tipoServico?.toLowerCase().includes('locação') && llmResult.tipoServico?.toLowerCase().includes('imóvel') && llmResult.empresaContratante) {
+            const autoEmpresa = llmResult.nomeContrato ? `${llmResult.empresaContratante} - ${llmResult.nomeContrato}` : llmResult.empresaContratante;
+            setEmpresa(autoEmpresa);
+          }
+
+
           if (llmResult.dataInicio) {
             const normalized = llmResult.dataInicio.includes('/') ? brToIso(llmResult.dataInicio) : llmResult.dataInicio;
             setDataInicio(normalized); autoFilled = true;
@@ -404,6 +411,15 @@ export default function Contratos() {
             setModeloCobranca('ti');
             autoFilled = true;
           }
+
+          // REGRA DE LOCAÇÃO: O valor da prestação é igual ao valor total (da cláusula Do Valor)
+          if (llmResult.tipoServico?.toLowerCase().includes('locação') && llmResult.valorTotal) {
+            setValorPrestacao(llmResult.valorTotal);
+            setValor(llmResult.valorTotal);
+            setModeloCobranca('geral');
+            autoFilled = true;
+          }
+
 
           setAiBreakdown({
             valorImplantacao: llmResult.valorImplantacao || undefined,
