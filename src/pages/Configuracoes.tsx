@@ -770,10 +770,10 @@ export default function Configuracoes() {
                     onChange={(e) => setLlmCustomPrompt(e.target.value)}
                     placeholder="Ex: Você é um assistente jurídico especializado em contratos públicos. Sempre responda de forma clara e cite as cláusulas relevantes..."
                     className="w-full h-40 p-4 rounded-xl border border-border bg-[#f8fafc] text-sm focus:ring-2 focus:ring-primary/20 outline-none resize-none placeholder:text-muted-foreground/50 transition-all font-medium"
-                    maxLength={2000}
+                    maxLength={5000}
                   />
                   <div className="absolute bottom-3 left-4 text-[10px] text-muted-foreground/60">
-                    {llmCustomPrompt.length}/2000 caracteres
+                    {llmCustomPrompt.length}/5000 caracteres
                   </div>
                 </div>
               </div>
