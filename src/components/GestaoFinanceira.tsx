@@ -12,14 +12,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
-import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  CheckCircle2, Clock, AlertTriangle, Printer, Save,
-  DollarSign, Percent, XCircle, Undo2, X, Maximize2, Minimize2, ChevronDown, MoreHorizontal
+  CheckCircle2, Clock, AlertTriangle, Printer,
+  DollarSign, XCircle, Undo2, X, Maximize2, Minimize2, MoreHorizontal
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { motion, AnimatePresence } from "framer-motion";
@@ -78,15 +75,14 @@ export default function GestaoFinanceira({ contrato, open, onClose }: GestaoFina
 
   const [multaGlobal, setMultaGlobal] = useState("");
   const [jurosGlobal, setJurosGlobal] = useState("");
+  const [isMinimized, setIsMinimized] = useState(false);
 
   const parcelasList = useMemo(() => {
     return getParcelasContrato(contrato.id).sort((a, b) => a.numero - b.numero);
   }, [contrato.id, getParcelasContrato, parcelas]);
 
-  // Local state for editing multas/juros before saving to DB
   const [extras, setExtras] = useState<Record<string, { multa: number; juros: number }>>({});
 
-  // Sync local extras with DB data when parcelas change or on mount
   React.useEffect(() => {
     const newExtras: Record<string, { multa: number; juros: number }> = {};
     parcelasList.forEach(p => {
@@ -115,9 +111,6 @@ export default function GestaoFinanceira({ contrato, open, onClose }: GestaoFina
   const parcelasPagas = useMemo(() =>
     parcelasList.filter(p => p.quitado), [parcelasList]);
 
-  const [isMinimized, setIsMinimized] = useState(false);
-
-  // Lock body scroll when open
   React.useEffect(() => {
     if (open && !isMinimized) {
       document.body.classList.add("no-scroll");
@@ -127,7 +120,6 @@ export default function GestaoFinanceira({ contrato, open, onClose }: GestaoFina
     return () => document.body.classList.remove("no-scroll");
   }, [open, isMinimized]);
 
-  // Sync multas based on contract's multaPercentual for overdue installments
   React.useEffect(() => {
     if ((contrato.multaPercentual || 0) > 0) {
       const pendingOverdue = parcelasVencidas.filter(p => !p.multa && !p.juros);
@@ -150,16 +142,8 @@ export default function GestaoFinanceira({ contrato, open, onClose }: GestaoFina
       ...prev,
       [id]: { ...getExtra(id), [field]: value }
     }));
-    // Auto-save individual change
-    const current = getExtra(id);
     updateParcela(id, { [field]: value });
   }, [getExtra, updateParcela]);
-
-  const calcTotal = (p: Parcela) => {
-    const base = parseCurrency(p.valor);
-    const ex = getExtra(p.id);
-    return base + ex.multa + (base * ex.juros / 100);
-  };
 
   const resumo = useMemo(() => {
     let totalPrestacoes = 0, totalPago = 0, totalPendente = 0, totalMultas = 0, totalJuros = 0;
@@ -202,7 +186,6 @@ export default function GestaoFinanceira({ contrato, open, onClose }: GestaoFina
       const updated = { ...prev };
       pendentes.forEach(p => {
         updated[p.id] = { ...(updated[p.id] || { multa: 0, juros: 0 }), multa: valor };
-        // Individual auto-save for each
         updateParcela(p.id, { multa: valor });
       });
       return updated;
@@ -218,14 +201,12 @@ export default function GestaoFinanceira({ contrato, open, onClose }: GestaoFina
       const updated = { ...prev };
       pendentes.forEach(p => {
         updated[p.id] = { ...(updated[p.id] || { multa: 0, juros: 0 }), juros: taxa };
-        // Individual auto-save for each
         updateParcela(p.id, { juros: taxa });
       });
       return updated;
     });
     toast({ title: "Juros aplicados", description: `Taxa de ${taxa}% aplicada em ${pendentes.length} parcelas pendentes.` });
   };
-
 
   const handlePrintReport = () => {
     const printWin = window.open("", "_blank", "width=900,height=700");
@@ -286,8 +267,7 @@ export default function GestaoFinanceira({ contrato, open, onClose }: GestaoFina
     printWin.print();
   };
 
-  // ─── Render parcela row ───────────────────────────────────
-  const renderParcelaRow = (p: Parcela, showActions = true) => {
+  const renderParcelaRow = (p: Parcela) => {
     const ex = getExtra(p.id);
     const base = parseCurrency(p.valor);
     const jurosVal = base * ex.juros / 100;
@@ -353,27 +333,24 @@ export default function GestaoFinanceira({ contrato, open, onClose }: GestaoFina
             </Badge>
           )}
         </TableCell>
-        {showActions && (
-          <TableCell>
-            <Button
-              size="sm"
-              variant={p.quitado ? "outline" : "default"}
-              onClick={() => p.quitado ? handleEstorno(p.id) : handleBaixa(p.id)}
-              className={cn("h-7 text-xs", !p.quitado && "bg-emerald-600 hover:bg-emerald-700")}
-            >
-              {p.quitado ? (
-                <><Undo2 className="w-3 h-3 mr-1" /> Estornar</>
-              ) : (
-                <><CheckCircle2 className="w-3 h-3 mr-1" /> Liquidar</>
-              )}
-            </Button>
-          </TableCell>
-        )}
+        <TableCell>
+          <Button
+            size="sm"
+            variant={p.quitado ? "outline" : "default"}
+            onClick={() => p.quitado ? handleEstorno(p.id) : handleBaixa(p.id)}
+            className={cn("h-7 text-xs", !p.quitado && "bg-emerald-600 hover:bg-emerald-700")}
+          >
+            {p.quitado ? (
+              <><Undo2 className="w-3 h-3 mr-1" /> Estornar</>
+            ) : (
+              <><CheckCircle2 className="w-3 h-3 mr-1" /> Liquidar</>
+            )}
+          </Button>
+        </TableCell>
       </TableRow>
     );
   };
 
-  // ─── Render mobile card ───────────────────────────────────
   const renderParcelaCard = (p: Parcela) => {
     const ex = getExtra(p.id);
     const base = parseCurrency(p.valor);
@@ -474,11 +451,14 @@ export default function GestaoFinanceira({ contrato, open, onClose }: GestaoFina
         exit={{ opacity: 0, scale: 0.95 }}
         transition={{ type: "spring", damping: 25, stiffness: 200 }}
         className={cn(
-          "fixed top-0 left-0 w-screen h-screen z-[100] bg-background flex flex-col shadow-2xl",
-          isMinimized && "cursor-pointer overflow-hidden border-4 border-primary/20 hover:border-primary/50"
+          "fixed inset-0 z-[100] bg-background flex flex-col shadow-2xl overflow-hidden",
+          isMinimized && "cursor-pointer border-4 border-primary/20 hover:border-primary/50"
         )}
         onClick={() => isMinimized && setIsMinimized(false)}
       >
+        {/* BACKGROUND OVERLAY FOR GLASS EFFECT */}
+        <div className="absolute inset-0 bg-background/95 backdrop-blur-sm -z-10" />
+
         {/* HEADER FIXO */}
         <header className="shrink-0 bg-card border-b z-20">
           <div className="flex items-center justify-between p-4 border-b">
@@ -527,7 +507,7 @@ export default function GestaoFinanceira({ contrato, open, onClose }: GestaoFina
                     </p>
                     <div className="flex flex-wrap gap-3 items-end">
                       <div className="space-y-1">
-                        <Label className="text-[10px] uppercase">Multa (R$)</Label>
+                        <Label className="text-[10px] uppercase font-semibold">Multa (R$)</Label>
                         <div className="flex gap-2">
                           <Input
                             placeholder="Ex: 50,00"
@@ -606,7 +586,7 @@ export default function GestaoFinanceira({ contrato, open, onClose }: GestaoFina
                         <Table>
                           <TableHeader className="bg-muted/50">
                             <TableRow>
-                              <TableHead className="w-16 font-bold text-[10px] uppercase">Nº</TableHead>
+                              <TableHead className="w-16 font-bold text-[10px] uppercase text-center">Nº</TableHead>
                               <TableHead className="font-bold text-[10px] uppercase">Valor Base</TableHead>
                               <TableHead className="font-bold text-[10px] uppercase">Vencimento</TableHead>
                               <TableHead className="font-bold text-[10px] uppercase">Multas (R$)</TableHead>
