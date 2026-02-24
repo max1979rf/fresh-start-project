@@ -203,6 +203,12 @@ export type Database = {
           saldo_contrato: string | null
           integrado_mv: boolean | null
           id_mv: string | null
+          vigencia_meses: number | null
+          modelo_cobranca: string | null
+          valor_implantacao: string | null
+          valor_manutencao_mensal: string | null
+          qtd_pagamentos: number | null
+          valor_prestacao: string | null
         }
         Insert: {
           id: string
@@ -229,6 +235,12 @@ export type Database = {
           saldo_contrato?: string | null
           integrado_mv?: boolean | null
           id_mv?: string | null
+          vigencia_meses?: number | null
+          modelo_cobranca?: string | null
+          valor_implantacao?: string | null
+          valor_manutencao_mensal?: string | null
+          qtd_pagamentos?: number | null
+          valor_prestacao?: string | null
         }
         Update: {
           id?: string
@@ -255,6 +267,12 @@ export type Database = {
           saldo_contrato?: string | null
           integrado_mv?: boolean | null
           id_mv?: string | null
+          vigencia_meses?: number | null
+          modelo_cobranca?: string | null
+          valor_implantacao?: string | null
+          valor_manutencao_mensal?: string | null
+          qtd_pagamentos?: number | null
+          valor_prestacao?: string | null
         }
         Relationships: [
           {
@@ -444,6 +462,49 @@ export type Database = {
           criado_em?: string
         }
         Relationships: []
+      }
+      parcelas: {
+        Row: {
+          id: string
+          id_contrato: string
+          numero: number
+          valor: string
+          data_vencimento: string
+          status: string
+          quitado: boolean
+          criado_em: string
+          atualizado_em: string
+        }
+        Insert: {
+          id: string
+          id_contrato: string
+          numero: number
+          valor: string
+          data_vencimento: string
+          status?: string
+          quitado?: boolean
+          criado_em?: string
+          atualizado_em?: string
+        }
+        Update: {
+          id?: string
+          id_contrato?: string
+          numero?: number
+          valor?: string
+          data_vencimento?: string
+          status?: string
+          quitado?: boolean
+          criado_em?: string
+          atualizado_em?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "parcelas_id_contrato_fkey"
+            columns: ["id_contrato"]
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          }
+        ]
       }
     }
     Views: {

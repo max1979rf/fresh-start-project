@@ -380,7 +380,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
                 if (modelosRes.data) setModelos(modelosRes.data.map(mapModeloFromDB));
 
                 // Load parcelas — with localStorage fallback if table doesn't exist
-                const parcelasRes = await (supabase as any).from('parcelas').select('*');
+                const parcelasRes = await supabase.from('parcelas').select('*');
                 if (parcelasRes.data) {
                     setParcelas(parcelasRes.data.map(mapParcelaFromDB));
                 } else if (parcelasRes.error) {
@@ -769,7 +769,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             persistParcelasLocal(updated);
             return updated;
         });
-        (supabase as any).from('parcelas').insert(created.map(p => ({
+        supabase.from('parcelas').insert(created.map(p => ({
             id: p.id, id_contrato: p.idContrato, numero: p.numero, valor: p.valor,
             data_vencimento: p.dataVencimento, status: p.status, quitado: p.quitado,
             criado_em: p.criadoEm,
@@ -790,7 +790,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         if (data.dataVencimento !== undefined) dbUpdate.data_vencimento = data.dataVencimento;
         if (data.status !== undefined) dbUpdate.status = data.status;
         if (data.quitado !== undefined) dbUpdate.quitado = data.quitado;
-        (supabase as any).from('parcelas').update(dbUpdate).eq('id', id).then(({ error }: any) => {
+        supabase.from('parcelas').update(dbUpdate).eq('id', id).then(({ error }) => {
             if (error) console.warn('Failed to update parcela in DB (using localStorage):', error.message);
         });
     }, [parcelas, persistParcelasLocal]);
@@ -803,7 +803,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             persistParcelasLocal(updated);
             return updated;
         });
-        (supabase as any).from('parcelas').delete().eq('id', id).then(({ error }: any) => {
+        supabase.from('parcelas').delete().eq('id', id).then(({ error }) => {
             if (error) console.warn('Failed to delete parcela from DB (using localStorage):', error.message);
         });
     }, [parcelas, persistParcelasLocal]);
