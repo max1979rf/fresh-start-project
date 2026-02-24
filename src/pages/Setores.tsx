@@ -40,14 +40,12 @@ export default function Setores() {
     };
 
     const handleDelete = (id: string, nomeSetor: string) => {
-        const hasUsers = usuarios.some(u => u.idSetor === id);
-        const hasContracts = contratos.some(c => c.idSetor === id);
-        if (hasUsers || hasContracts) {
-            alert("Não é possível excluir este setor. Existem usuários ou contratos vinculados.");
+        if (!confirm(`Deseja excluir o setor "${nomeSetor}"?`)) return;
+        const ok = deleteSetor(id);
+        if (!ok) {
+            alert("Não é possível excluir este setor. Existem usuários ou contratos ativos vinculados.");
             return;
         }
-        if (!confirm(`Deseja excluir o setor "${nomeSetor}"?`)) return;
-        deleteSetor(id);
         addLog(currentUser!.id, currentUser!.nome, 'Setor excluído', `Setor: ${nomeSetor}`);
     };
 
