@@ -112,6 +112,22 @@ export default function GestaoFinanceira({ contrato, open, onClose }: GestaoFina
   const parcelasPagas = useMemo(() =>
     parcelasList.filter(p => p.quitado), [parcelasList]);
 
+  // Sync multas based on contract's multaPercentual for overdue installments
+  React.useEffect(() => {
+    if ((contrato.multaPercentual || 0) > 0) {
+      const pendingOverdue = parcelasVencidas.filter(p => !p.multa && !p.juros);
+      if (pendingOverdue.length > 0) {
+        pendingOverdue.forEach(p => {
+          const base = parseCurrency(p.valor);
+          const calculatedMulta = base * (contrato.multaPercentual! / 100);
+          if (calculatedMulta > 0) {
+            updateParcela(p.id, { multa: calculatedMulta });
+          }
+        });
+      }
+    }
+  }, [parcelasVencidas, contrato.multaPercentual, updateParcela]);
+
   const getExtra = (id: string) => extras[id] || { multa: 0, juros: 0 };
 
   const setParcelaExtra = useCallback((id: string, field: "multa" | "juros", value: number) => {
@@ -119,7 +135,10 @@ export default function GestaoFinanceira({ contrato, open, onClose }: GestaoFina
       ...prev,
       [id]: { ...getExtra(id), [field]: value }
     }));
-  }, [extras]);
+    // Auto-save individual change
+    const current = getExtra(id);
+    updateParcela(id, { [field]: value });
+  }, [getExtra, updateParcela]);
 
   const calcTotal = (p: Parcela) => {
     const base = parseCurrency(p.valor);
@@ -168,6 +187,8 @@ export default function GestaoFinanceira({ contrato, open, onClose }: GestaoFina
       const updated = { ...prev };
       pendentes.forEach(p => {
         updated[p.id] = { ...(updated[p.id] || { multa: 0, juros: 0 }), multa: valor };
+        // Individual auto-save for each
+        updateParcela(p.id, { multa: valor });
       });
       return updated;
     });
@@ -182,32 +203,14 @@ export default function GestaoFinanceira({ contrato, open, onClose }: GestaoFina
       const updated = { ...prev };
       pendentes.forEach(p => {
         updated[p.id] = { ...(updated[p.id] || { multa: 0, juros: 0 }), juros: taxa };
+        // Individual auto-save for each
+        updateParcela(p.id, { juros: taxa });
       });
       return updated;
     });
     toast({ title: "Juros aplicados", description: `Taxa de ${taxa}% aplicada em ${pendentes.length} parcelas pendentes.` });
   };
 
-  const handleSalvar = async () => {
-    try {
-      toast({ title: "Salvando...", description: "Sincronizando dados com o banco de dados." });
-
-      // Persist each changed parcela to DB
-      const promises = Object.entries(extras).map(([id, data]) => {
-        return updateParcela(id, { multa: data.multa, juros: data.juros });
-      });
-
-      await Promise.all(promises);
-
-      if (currentUser) {
-        addLog(currentUser.id, currentUser.nome, "Salvar Financeiro",
-          `Dados financeiros salvos para contrato ${contrato.numero}`);
-      }
-      toast({ title: "Dados salvos", description: "Informações financeiras sincronizadas com o Supabase." });
-    } catch (err) {
-      toast({ title: "Erro ao salvar", description: "Ocorreu um problema ao sincronizar com o banco.", variant: "destructive" });
-    }
-  };
 
   const handlePrintReport = () => {
     const printWin = window.open("", "_blank", "width=900,height=700");
@@ -506,12 +509,9 @@ export default function GestaoFinanceira({ contrato, open, onClose }: GestaoFina
           <Separator />
 
           {/* Action buttons */}
-          <div className="flex justify-between">
+          <div className="flex justify-start">
             <Button variant="outline" onClick={handlePrintReport}>
               <Printer className="w-4 h-4 mr-2" /> Relatório
-            </Button>
-            <Button onClick={handleSalvar} className="bg-primary">
-              <Save className="w-4 h-4 mr-2" /> Salvar
             </Button>
           </div>
         </div>
