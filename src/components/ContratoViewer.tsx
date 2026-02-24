@@ -149,7 +149,7 @@ export default function ContratoViewer({ open, onClose, arquivoPdf, nomeArquivo,
 
                                             {empresa && (
                                                 <div>
-                                                    <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold mb-1">Empresa</p>
+                                                    <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold mb-1">Empresa / Nome do Contrato</p>
                                                     <p className="text-sm font-medium text-foreground">{empresa}</p>
                                                 </div>
                                             )}
@@ -218,7 +218,7 @@ export default function ContratoViewer({ open, onClose, arquivoPdf, nomeArquivo,
                                             title={`Visualização de ${numeroContrato}`}
                                         />
                                     </div>
-                ) : blobUrl && isDocFile && isStorageUrl(blobUrl) ? (
+                                ) : blobUrl && isDocFile && isStorageUrl(blobUrl) ? (
                                     <div className="w-full h-full flex flex-col">
                                         <iframe
                                             src={`https://docs.google.com/gview?url=${encodeURIComponent(blobUrl)}&embedded=true`}

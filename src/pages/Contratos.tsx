@@ -308,7 +308,12 @@ export default function Contratos() {
         fields = parseContractFields(text);
         const autoNumero = fields.numero || generateContractNumber(contratos.map(c => c.numero));
         if (!numero) { setNumero(autoNumero); autoFilled = true; }
-        if (fields.empresa && !empresa) { setEmpresa(fields.empresa); autoFilled = true; }
+        if (fields.empresa && !empresa) {
+          const autoEmpresa = fields.nomeContrato ? `${fields.empresa} - ${fields.nomeContrato}` : fields.empresa;
+          setEmpresa(autoEmpresa);
+          autoFilled = true;
+        }
+
         if (!descricao) {
           const localDescr = fields.nomeContrato || fields.objeto;
           if (localDescr) { setDescricao(localDescr); autoFilled = true; }
@@ -349,87 +354,91 @@ export default function Contratos() {
         if (llmEmpresa) {
           setEmpresa(llmEmpresa);
           autoFilled = true;
-          console.log('[LLM] Empresa preenchida:', llmEmpresa, '| contratada:', llmResult.empresaContratada, '| contratante:', llmResult.empresaContratante);
-        }
-        const llmDescr = llmResult.nomeContrato || llmResult.descricaoObjeto;
-        if (llmDescr) { setDescricao(llmDescr); autoFilled = true; }
-        if (llmResult.descricaoObjeto) { setObjeto(llmResult.descricaoObjeto); }
-        if (llmResult.valorTotal) { setValor(llmResult.valorTotal); autoFilled = true; }
-        if (llmResult.dataInicio) {
-          const normalized = llmResult.dataInicio.includes('/') ? brToIso(llmResult.dataInicio) : llmResult.dataInicio;
-          setDataInicio(normalized); autoFilled = true;
-        }
-        if (llmResult.dataVencimento) {
-          const normalized = llmResult.dataVencimento.includes('/') ? brToIso(llmResult.dataVencimento) : llmResult.dataVencimento;
-          setDataVencimento(normalized); checkAutoStatus(normalized); autoFilled = true;
-        }
-        if (llmResult.tipoServico) {
-          // Map LLM tipo to our enum
-          const tipoMap: Record<string, string> = {
-            'serviço': 'Serviços de TI', 'serviços': 'Serviços de TI', 'serviços de ti': 'Serviços de TI',
-            'software': 'Sistema / Software', 'sistema': 'Sistema / Software',
-            'infraestrutura': 'Infraestrutura', 'implantação': 'Implantação',
-            'manutenção': 'Manutenção', 'obra': 'Obra',
-          };
-          const mapped = tipoMap[llmResult.tipoServico.toLowerCase()] || 
-            tiposContrato.find(t => t.toLowerCase().includes(llmResult.tipoServico!.toLowerCase())) || 
-            llmResult.tipoServico;
-          handleTipoChange(mapped); // This also sets setor and modeloCobranca
-          autoFilled = true;
-        }
-        if (llmResult.vigenciaMeses) {
-          setVigenciaMeses(String(llmResult.vigenciaMeses));
-          // Qtd prestações = meses de vigência
-          setQtdPagamentos(String(llmResult.vigenciaMeses));
-          autoFilled = true;
-        }
+          const llmDescr = llmResult.nomeContrato || llmResult.descricaoObjeto;
+          if (llmDescr) { setDescricao(llmDescr); autoFilled = true; }
+          if (llmResult.descricaoObjeto) { setObjeto(llmResult.descricaoObjeto); }
+          if (llmResult.empresa && !empresa) {
+            const autoEmpresa = llmResult.nomeContrato ? `${llmResult.empresa} - ${llmResult.nomeContrato}` : llmResult.empresa;
+            setEmpresa(autoEmpresa);
+            autoFilled = true;
+          }
 
-        // ── Apply financial values from LLM ──
-        if (llmResult.valorImplantacao) {
-          setValorImplantacao(llmResult.valorImplantacao);
-          autoFilled = true;
-        }
-        if (llmResult.valorMensalidade) {
-          setValorManutencaoMensal(llmResult.valorMensalidade);
-          // Valor da prestação = valor mensal recorrente
-          setValorPrestacao(llmResult.valorMensalidade);
-          setModeloCobranca('ti');
-          autoFilled = true;
-        }
+          if (llmResult.dataInicio) {
+            const normalized = llmResult.dataInicio.includes('/') ? brToIso(llmResult.dataInicio) : llmResult.dataInicio;
+            setDataInicio(normalized); autoFilled = true;
+          }
+          if (llmResult.dataVencimento) {
+            const normalized = llmResult.dataVencimento.includes('/') ? brToIso(llmResult.dataVencimento) : llmResult.dataVencimento;
+            setDataVencimento(normalized); checkAutoStatus(normalized); autoFilled = true;
+          }
+          if (llmResult.tipoServico) {
+            // Map LLM tipo to our enum
+            const tipoMap: Record<string, string> = {
+              'serviço': 'Serviços de TI', 'serviços': 'Serviços de TI', 'serviços de ti': 'Serviços de TI',
+              'software': 'Sistema / Software', 'sistema': 'Sistema / Software',
+              'infraestrutura': 'Infraestrutura', 'implantação': 'Implantação',
+              'manutenção': 'Manutenção', 'obra': 'Obra',
+            };
+            const mapped = tipoMap[llmResult.tipoServico.toLowerCase()] ||
+              tiposContrato.find(t => t.toLowerCase().includes(llmResult.tipoServico!.toLowerCase())) ||
+              llmResult.tipoServico;
+            handleTipoChange(mapped); // This also sets setor and modeloCobranca
+            autoFilled = true;
+          }
+          if (llmResult.vigenciaMeses) {
+            setVigenciaMeses(String(llmResult.vigenciaMeses));
+            // Qtd prestações = meses de vigência
+            setQtdPagamentos(String(llmResult.vigenciaMeses));
+            autoFilled = true;
+          }
 
-        setAiBreakdown({
-          valorImplantacao: llmResult.valorImplantacao || undefined,
-          valorMensalidade: llmResult.valorMensalidade || undefined,
-          breakdownValor: llmResult.breakdownValor || undefined,
-          vigenciaMeses: llmResult.vigenciaMeses,
-          vigenciaTexto: llmResult.vigenciaMeses ? `${llmResult.vigenciaMeses} ${llmResult.vigenciaMeses === 1 ? 'mês' : 'meses'}` : undefined,
-        });
+          // ── Apply financial values from LLM ──
+          if (llmResult.valorImplantacao) {
+            setValorImplantacao(llmResult.valorImplantacao);
+            autoFilled = true;
+          }
+          if (llmResult.valorMensalidade) {
+            setValorManutencaoMensal(llmResult.valorMensalidade);
+            // Valor da prestação = valor mensal recorrente
+            setValorPrestacao(llmResult.valorMensalidade);
+            setModeloCobranca('ti');
+            autoFilled = true;
+          }
 
-        if (llmResult.clausulasAbusivas.length > 0) {
-          hasAbusive = true;
-          llmResult.clausulasAbusivas.forEach(c => {
-            const icon = c.severidade === 'alta' ? '🔴' : c.severidade === 'media' ? '⚠️' : '⚡';
-            allFindings.push(`${icon} [IA] ${c.descricao}`);
+          setAiBreakdown({
+            valorImplantacao: llmResult.valorImplantacao || undefined,
+            valorMensalidade: llmResult.valorMensalidade || undefined,
+            breakdownValor: llmResult.breakdownValor || undefined,
+            vigenciaMeses: llmResult.vigenciaMeses,
+            vigenciaTexto: llmResult.vigenciaMeses ? `${llmResult.vigenciaMeses} ${llmResult.vigenciaMeses === 1 ? 'mês' : 'meses'}` : undefined,
           });
+
+          if (llmResult.clausulasAbusivas.length > 0) {
+            hasAbusive = true;
+            llmResult.clausulasAbusivas.forEach(c => {
+              const icon = c.severidade === 'alta' ? '🔴' : c.severidade === 'media' ? '⚠️' : '⚡';
+              allFindings.push(`${icon} [IA] ${c.descricao}`);
+            });
+          }
+          llmResult.alertas.forEach(a => { allFindings.push(`ℹ️ [IA] ${a}`); });
         }
-        llmResult.alertas.forEach(a => { allFindings.push(`ℹ️ [IA] ${a}`); });
+
+        let dateFindings: string[] = [];
+        if (fields.dataInicio || llmResult?.dataInicio) dateFindings.push(`📅 Data de assinatura identificada`);
+        else { dateFindings.push(`⚠️ Data de assinatura NÃO encontrada — preencha manualmente`); addAlerta({ tipo: 'geral', mensagem: `Data de assinatura não encontrada em "${file.name}"`, empresa: empresa || undefined, urgencia: 'alta' }); }
+        if (fields.dataVencimento || llmResult?.dataVencimento) dateFindings.push(`📅 Data de vencimento identificada`);
+        else dateFindings.push(`❓ Data de vencimento será calculada pela vigência`);
+        if (!llmResult?.vigenciaMeses && !fields.vigenciaMeses) { dateFindings.push(`⚠️ Vigência NÃO identificada — preencha manualmente`); addAlerta({ tipo: 'geral', mensagem: `Vigência não encontrada em "${file.name}"`, empresa: empresa || undefined, urgencia: 'media' }); }
+        if (!llmResult?.valorTotal && !fields.valor) { dateFindings.push(`⚠️ Valor total NÃO identificado — preencha manualmente`); }
+
+        setAnalysisResult({ hasAbusiveClauses: hasAbusive, missingSignature: analysis.missingSignature, findings: [...allFindings, ...dateFindings], autoFilled });
+        toast({ title: "✅ Análise concluída", description: autoFilled ? "Campos preenchidos automaticamente." : "Documento analisado." });
+
+        if (hasAbusive) addAlerta({ tipo: 'clausula_abusiva', mensagem: `Cláusula(s) abusiva(s) em "${file.name}"`, empresa: empresa || undefined, urgencia: 'alta' });
+        if (analysis.missingSignature) addAlerta({ tipo: 'geral', mensagem: `Assinatura não identificada em "${file.name}"`, empresa: empresa || undefined, urgencia: 'alta' });
+
+        addLog(currentUser!.id, currentUser!.nome, 'Análise IA executada', `Arquivo: ${file.name}`);
       }
-
-      let dateFindings: string[] = [];
-      if (fields.dataInicio || llmResult?.dataInicio) dateFindings.push(`📅 Data de assinatura identificada`);
-      else { dateFindings.push(`⚠️ Data de assinatura NÃO encontrada — preencha manualmente`); addAlerta({ tipo: 'geral', mensagem: `Data de assinatura não encontrada em "${file.name}"`, empresa: empresa || undefined, urgencia: 'alta' }); }
-      if (fields.dataVencimento || llmResult?.dataVencimento) dateFindings.push(`📅 Data de vencimento identificada`);
-      else dateFindings.push(`❓ Data de vencimento será calculada pela vigência`);
-      if (!llmResult?.vigenciaMeses && !fields.vigenciaMeses) { dateFindings.push(`⚠️ Vigência NÃO identificada — preencha manualmente`); addAlerta({ tipo: 'geral', mensagem: `Vigência não encontrada em "${file.name}"`, empresa: empresa || undefined, urgencia: 'media' }); }
-      if (!llmResult?.valorTotal && !fields.valor) { dateFindings.push(`⚠️ Valor total NÃO identificado — preencha manualmente`); }
-
-      setAnalysisResult({ hasAbusiveClauses: hasAbusive, missingSignature: analysis.missingSignature, findings: [...allFindings, ...dateFindings], autoFilled });
-      toast({ title: "✅ Análise concluída", description: autoFilled ? "Campos preenchidos automaticamente." : "Documento analisado." });
-
-      if (hasAbusive) addAlerta({ tipo: 'clausula_abusiva', mensagem: `Cláusula(s) abusiva(s) em "${file.name}"`, empresa: empresa || undefined, urgencia: 'alta' });
-      if (analysis.missingSignature) addAlerta({ tipo: 'geral', mensagem: `Assinatura não identificada em "${file.name}"`, empresa: empresa || undefined, urgencia: 'alta' });
-
-      addLog(currentUser!.id, currentUser!.nome, 'Análise IA executada', `Arquivo: ${file.name}`);
     } catch (err) {
       console.warn('Analysis failed:', err);
       setAnalysisResult({ hasAbusiveClauses: false, missingSignature: false, findings: ['⚡ Não foi possível analisar automaticamente'], autoFilled: false });
@@ -499,7 +508,7 @@ export default function Contratos() {
     // Upload file to Supabase Storage if there's a new file
     let finalArquivoPdf = arquivoPdf;
     let finalNomeArquivo = nomeArquivo;
-    
+
     if (uploadedFile) {
       toast({ title: "📤 Enviando arquivo...", description: "Salvando documento no servidor..." });
       const tempId = editingId || ('ct_' + Date.now().toString(36));
@@ -651,10 +660,11 @@ export default function Contratos() {
                   className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring" />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Empresa *</label>
-                <input value={empresa} onChange={(e) => setEmpresa(e.target.value)} placeholder="Nome da empresa"
+                <label className="text-xs font-medium text-muted-foreground">Empresa / Nome do Contrato *</label>
+                <input value={empresa} onChange={(e) => setEmpresa(e.target.value)} placeholder="Ex: Empresa - Nome do Contrato"
                   className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring" />
               </div>
+
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground flex items-center gap-2">
                   Tipo de Contrato *
@@ -677,7 +687,7 @@ export default function Contratos() {
               </div>
               <div className="space-y-1.5 md:col-span-2 lg:col-span-3">
                 <label className="text-xs font-medium text-muted-foreground">Nome / Descrição do Contrato *</label>
-                <input value={descricao} onChange={(e) => setDescricao(e.target.value)} 
+                <input value={descricao} onChange={(e) => setDescricao(e.target.value)}
                   placeholder="Ex: CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE IMPLANTAÇÃO, MANUTENÇÃO E ATUALIZAÇÃO DE SISTEMA"
                   className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring uppercase"
                   style={{ textTransform: 'uppercase' }} />
@@ -895,7 +905,7 @@ export default function Contratos() {
             <thead>
               <tr className="border-b border-border bg-muted/30">
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Nº Contrato</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Empresa</th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Empresa / Nome do Contrato</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground hidden lg:table-cell">Objeto</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Tipo</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground hidden md:table-cell">Setor</th>
