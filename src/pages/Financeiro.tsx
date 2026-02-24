@@ -139,12 +139,16 @@ export default function Financeiro() {
       totalParcelas += parcs.length;
       parcs.forEach(p => {
         const pVal = parseCurrency(p.valor);
+        const pMulta = p.multa || 0;
+        const pJuros = (pVal * (p.juros || 0) / 100);
+        const pTotal = pVal + pMulta + pJuros;
+
         if (p.status === "pago" || p.quitado) {
           parcelasPagas++;
-          valorPago += pVal;
+          valorPago += pTotal;
         } else {
           parcelasPendentes++;
-          valorPendente += pVal;
+          valorPendente += pTotal;
         }
       });
     });

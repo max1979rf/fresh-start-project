@@ -470,37 +470,49 @@ export default function Contratos() {
     }
   }, [showForm, numero, empresa, descricao, valor, dataInicio, dataVencimento, addAlerta, addLog, currentUser, appConfig, contratos]);
 
-  const generateParcelas = (contratoId: string) => {
-    let qtd = 0;
-    let vlrParcela = 0;
-    const inicio = dataInicio;
+  const generateParcelas = (contratoId: string, overrideData?: any) => {
+    const activeModelo = overrideData?.modeloCobranca || modeloCobranca;
+    const activeDataInicio = overrideData?.dataInicio || dataInicio;
+    const activeVigencia = parseInt(overrideData?.vigenciaMeses || vigenciaMeses) || 0;
+    const activeValorMensal = parseCurrency(overrideData?.valorManutencaoMensal || valorManutencaoMensal);
+    const activeValorImpl = parseCurrency(overrideData?.valorImplantacao || valorImplantacao);
+    const activeQtdPag = parseInt(overrideData?.qtdPagamentos || qtdPagamentos) || 0;
+    const activeValorPrest = parseCurrency(overrideData?.valorPrestacao || valorPrestacao);
+    const activeMultaPerc = overrideData?.multaPercentual || multaPercentual;
 
-    if (modeloCobranca === 'ti') {
-      qtd = parseInt(vigenciaMeses) || 0;
-      vlrParcela = parseCurrency(valorManutencaoMensal);
-      // Add implantação as first parcela if exists
-      const impl = parseCurrency(valorImplantacao);
+    const inicio = activeDataInicio;
+
+    if (activeModelo === 'ti') {
+      const qtd = activeVigencia;
+      const vlrParcela = activeValorMensal;
+      const impl = activeValorImpl;
+
       const newParcelas: Omit<Parcela, 'id' | 'criadoEm'>[] = [];
       let parcelaNum = 1;
+
       if (impl > 0) {
         newParcelas.push({
           idContrato: contratoId, numero: parcelaNum, valor: formatCurrency(impl),
           dataVencimento: inicio, status: 'pendente', quitado: false,
+          multa: 0, juros: 0
         });
         parcelaNum++;
       }
+
       for (let i = 0; i < qtd; i++) {
         newParcelas.push({
           idContrato: contratoId, numero: parcelaNum + i,
           valor: formatCurrency(vlrParcela),
           dataVencimento: addMonths(inicio, i + 1),
           status: 'pendente', quitado: false,
+          multa: 0, juros: 0
         });
       }
       if (newParcelas.length > 0) addParcelas(newParcelas);
     } else {
-      qtd = parseInt(qtdPagamentos) || 0;
-      vlrParcela = parseCurrency(valorPrestacao);
+      const qtd = activeQtdPag;
+      const vlrParcela = activeValorPrest;
+
       if (qtd > 0 && vlrParcela > 0) {
         const newParcelas: Omit<Parcela, 'id' | 'criadoEm'>[] = [];
         for (let i = 0; i < qtd; i++) {
@@ -509,6 +521,7 @@ export default function Contratos() {
             valor: formatCurrency(vlrParcela),
             dataVencimento: addMonths(inicio, i + 1),
             status: 'pendente', quitado: false,
+            multa: 0, juros: 0
           });
         }
         addParcelas(newParcelas);
@@ -673,24 +686,16 @@ export default function Contratos() {
         // Apply contract data changes
         updateContrato(c.id, updates);
 
-        // Ask to regenerate parcelas if there are none or if user confirms
+        // Ask to regenerate parcelas if there are none
         const existingParcelas = getParcelasContrato(c.id);
         if (existingParcelas.length === 0) {
-          // Need temporary state to call generateParcelas correctly
-          setVigenciaMeses(String(updates.vigenciaMeses || c.vigenciaMeses || ''));
-          setValorManutencaoMensal(updates.valorManutencaoMensal || c.valorManutencaoMensal || '');
-          setValorImplantacao(updates.valorImplantacao || c.valorImplantacao || '');
-          setQtdPagamentos(String(updates.qtdPagamentos || c.qtdPagamentos || ''));
-          setValorPrestacao(updates.valorPrestacao || c.valorPrestacao || '');
-          setDataInicio(brToIso(c.dataInicio));
-          setModeloCobranca(updates.modeloCobranca || c.modeloCobranca || 'geral');
-
-          // In a real app we'd wait for state or pass directly. 
-          // Here we'll trigger it next tick or just construct call directly.
-          setTimeout(() => generateParcelas(c.id), 500);
-          toast({ title: "✅ Financeiro Atualizado", description: "Termos identificados e parcelas geradas." });
+          generateParcelas(c.id, {
+            ...updates,
+            dataInicio: brToIso(c.dataInicio)
+          });
+          toast({ title: "Financeiro Atualizado", description: "Dados sincronizados e parcelas geradas." });
         } else {
-          toast({ title: "✅ Atualizado", description: "Termos financeiros identificados via IA." });
+          toast({ title: "Financeiro Atualizado", description: "Dados sincronizados com sucesso." });
         }
 
         addLog(currentUser!.id, currentUser!.nome, 'Sincronização Financeira IA', `Contrato: ${c.numero}`);
