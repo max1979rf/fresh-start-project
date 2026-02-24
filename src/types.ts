@@ -59,6 +59,7 @@ export interface Contrato {
   valorManutencaoMensal?: string;
   qtdPagamentos?: number;
   valorPrestacao?: string;
+  multaPercentual?: number;
   // Campos específicos para contratos de Obra
   qtdMedicoes?: number;
   medicaoAtual?: number;

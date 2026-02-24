@@ -109,6 +109,7 @@ function mapContratoFromDB(row: Record<string, unknown>): Contrato {
         valorManutencaoMensal: (row.valor_manutencao_mensal as string) ?? undefined,
         qtdPagamentos: row.qtd_pagamentos != null ? Number(row.qtd_pagamentos) : undefined,
         valorPrestacao: (row.valor_prestacao as string) ?? undefined,
+        multaPercentual: row.multa_percentual != null ? Number(row.multa_percentual) : undefined,
         // Fields not in DB but used locally
         saldoContrato: (row.saldo_contrato as string) ?? undefined,
         qtdMedicoes: row.qtd_medicoes != null ? Number(row.qtd_medicoes) : undefined,
@@ -694,6 +695,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             valor_manutencao_mensal: novo.valorManutencaoMensal ?? null,
             qtd_pagamentos: novo.qtdPagamentos ?? null,
             valor_prestacao: novo.valorPrestacao ?? null,
+            multa_percentual: novo.multaPercentual ?? null,
         }).then(({ error }) => {
 
             if (error) {
@@ -738,6 +740,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         if (data.valorManutencaoMensal !== undefined) dbUpdate.valor_manutencao_mensal = data.valorManutencaoMensal ?? null;
         if (data.qtdPagamentos !== undefined) dbUpdate.qtd_pagamentos = data.qtdPagamentos ?? null;
         if (data.valorPrestacao !== undefined) dbUpdate.valor_prestacao = data.valorPrestacao ?? null;
+        if (data.multaPercentual !== undefined) dbUpdate.multa_percentual = data.multaPercentual ?? null;
         supabase.from('contratos').update(dbUpdate).eq('id', id).then(({ error }) => {
 
             if (error) console.error('Failed to update contrato:', error);

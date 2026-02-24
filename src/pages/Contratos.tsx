@@ -622,6 +622,79 @@ export default function Contratos() {
     setSendingWebhook(null);
   };
 
+  const handleSyncFinancials = async (c: typeof contratos[0]) => {
+    if (!c.arquivoPdf) {
+      toast({ title: "Arquivo ausente", description: "O contrato não possui um PDF anexado para análise.", variant: "destructive" });
+      return;
+    }
+
+    const llmConfigured = !!(appConfig.llmApiKey && appConfig.llmStatus === 'connected');
+    if (!llmConfigured) {
+      toast({ title: "IA não configurada", description: "Configure a API da IA nas configurações primeiro.", variant: "destructive" });
+      return;
+    }
+
+    setAnalysisLoading(true);
+    setSendingWebhook(c.id);
+
+    try {
+      toast({ title: "🔍 Analisando Financeiro...", description: `A IA está processando os termos de "${c.numero}"...` });
+
+      const text = await extractTextFromPdf(c.arquivoPdf, appConfig);
+      const llmResult = await analyzeContractWithLlm(appConfig, text);
+
+      if (llmResult) {
+        // Build update object
+        const updates: any = {};
+        if (llmResult.valorTotal) updates.valor = llmResult.valorTotal;
+        if (llmResult.vigenciaMeses) updates.vigenciaMeses = llmResult.vigenciaMeses;
+        if (llmResult.qtdParcelas) updates.qtdPagamentos = llmResult.qtdParcelas;
+        if (llmResult.valorMensalidade) updates.valorPrestacao = llmResult.valorMensalidade;
+        if (llmResult.valorImplantacao) updates.valorImplantacao = llmResult.valorImplantacao;
+        if (llmResult.multaPercentual) updates.multaPercentual = llmResult.multaPercentual;
+
+        // Determine pricing model if possible
+        if (llmResult.valorImplantacao && llmResult.valorMensalidade) {
+          updates.modeloCobranca = 'ti';
+          updates.valorManutencaoMensal = llmResult.valorMensalidade;
+        } else if (llmResult.valorMensalidade) {
+          updates.modeloCobranca = 'geral';
+          updates.valorPrestacao = llmResult.valorMensalidade;
+        }
+
+        // Apply contract data changes
+        updateContrato(c.id, updates);
+
+        // Ask to regenerate parcelas if there are none or if user confirms
+        const existingParcelas = getParcelasContrato(c.id);
+        if (existingParcelas.length === 0) {
+          // Need temporary state to call generateParcelas correctly
+          setVigenciaMeses(String(updates.vigenciaMeses || c.vigenciaMeses || ''));
+          setValorManutencaoMensal(updates.valorManutencaoMensal || c.valorManutencaoMensal || '');
+          setValorImplantacao(updates.valorImplantacao || c.valorImplantacao || '');
+          setQtdPagamentos(String(updates.qtdPagamentos || c.qtdPagamentos || ''));
+          setValorPrestacao(updates.valorPrestacao || c.valorPrestacao || '');
+          setDataInicio(brToIso(c.dataInicio));
+          setModeloCobranca(updates.modeloCobranca || c.modeloCobranca || 'geral');
+
+          // In a real app we'd wait for state or pass directly. 
+          // Here we'll trigger it next tick or just construct call directly.
+          setTimeout(() => generateParcelas(c.id), 500);
+          toast({ title: "✅ Financeiro Atualizado", description: "Termos identificados e parcelas geradas." });
+        } else {
+          toast({ title: "✅ Atualizado", description: "Termos financeiros identificados via IA." });
+        }
+
+        addLog(currentUser!.id, currentUser!.nome, 'Sincronização Financeira IA', `Contrato: ${c.numero}`);
+      }
+    } catch (err) {
+      toast({ title: "Erro na análise", description: "Não foi possível extrair dados do contrato.", variant: "destructive" });
+    } finally {
+      setAnalysisLoading(false);
+      setSendingWebhook(null);
+    }
+  };
+
   const handleToggleParcelaStatus = (parcela: Parcela) => {
     const newStatus = parcela.status === 'pendente' ? 'pago' : 'pendente';
     updateParcela(parcela.id, { status: newStatus, quitado: newStatus === 'pago' });
@@ -926,8 +999,11 @@ export default function Contratos() {
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Tipo</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground hidden md:table-cell">Setor</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground hidden md:table-cell">Valor</th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Parcelas</th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground hidden lg:table-cell">Vencidas</th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground hidden lg:table-cell">Multas</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Status</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground hidden md:table-cell">Vencimento</th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground hidden xl:table-cell">Vencimento</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Ações</th>
               </tr>
             </thead>
@@ -949,9 +1025,58 @@ export default function Contratos() {
                       <td className="px-5 py-3.5 text-muted-foreground hidden md:table-cell">{getSetorNome(c.idSetor)}</td>
                       <td className="px-5 py-3.5 font-medium text-foreground hidden md:table-cell">{c.valor}</td>
                       <td className="px-5 py-3.5">
+                        <div className="flex flex-col">
+                          <span className="text-xs font-medium text-foreground">{contratoParcelas.filter(p => p.status === 'pago').length} / {contratoParcelas.length}</span>
+                          <div className="w-16 h-1 bg-muted rounded-full mt-1 overflow-hidden">
+                            <div
+                              className="h-full bg-success transition-all"
+                              style={{ width: `${contratoParcelas.length > 0 ? (contratoParcelas.filter(p => p.status === 'pago').length / contratoParcelas.length * 100) : 0}%` }}
+                            />
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5 hidden lg:table-cell">
+                        {(() => {
+                          const vencidas = contratoParcelas.filter(p => {
+                            if (p.status === 'pago') return false;
+                            const venc = p.dataVencimento.includes('-') ? new Date(p.dataVencimento) : brToIso(p.dataVencimento) ? new Date(brToIso(p.dataVencimento)) : null;
+                            if (!venc) return false;
+                            return venc < new Date();
+                          }).length;
+                          return vencidas > 0 ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-destructive/10 text-destructive font-bold text-xs">
+                              {vencidas}
+                            </span>
+                          ) : <span className="text-muted-foreground text-xs">—</span>;
+                        })()}
+                      </td>
+                      <td className="px-5 py-3.5 hidden lg:table-cell">
+                        {(() => {
+                          const vencidas = contratoParcelas.filter(p => {
+                            if (p.status === 'pago') return false;
+                            const venc = p.dataVencimento.includes('-') ? new Date(p.dataVencimento) : brToIso(p.dataVencimento) ? new Date(brToIso(p.dataVencimento)) : null;
+                            if (!venc) return false;
+                            return venc < new Date();
+                          }).length;
+
+                          if (vencidas === 0) return <span className="text-muted-foreground text-xs">—</span>;
+
+                          // Calculate fine base value if multaPercentual exists
+                          const multaBase = (c.multaPercentual || 0) > 0 ? (vencidas * (parseCurrency(c.valorPrestacao || "0") * (c.multaPercentual || 0) / 100)) : 0;
+
+                          return multaBase > 0 ? (
+                            <span className="text-destructive font-semibold text-xs" title={`${c.multaPercentual}% de multa identificada`}>
+                              {formatCurrency(multaBase)}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground text-xs italic">({c.multaPercentual || 0}%)</span>
+                          );
+                        })()}
+                      </td>
+                      <td className="px-5 py-3.5">
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusStyle[c.status] || ''}`}>{c.status}</span>
                       </td>
-                      <td className="px-5 py-3.5 text-muted-foreground hidden md:table-cell">
+                      <td className="px-5 py-3.5 text-muted-foreground hidden xl:table-cell">
                         <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {c.dataVencimento}</span>
                       </td>
                       <td className="px-5 py-3.5">
@@ -979,8 +1104,12 @@ export default function Contratos() {
                             </button>
                           )}
                           <button onClick={() => handleSendToIA(c)} disabled={sendingWebhook === c.id}
-                            className="p-1.5 rounded-md hover:bg-accent/10 transition-colors disabled:opacity-50" title="Enviar para IA">
+                            className="p-1.5 rounded-md hover:bg-accent/10 transition-colors disabled:opacity-50" title="Webhook Integrado">
                             {sendingWebhook === c.id ? <Loader2 className="w-4 h-4 text-accent animate-spin" /> : <Send className="w-4 h-4 text-accent" />}
+                          </button>
+                          <button onClick={() => handleSyncFinancials(c)} disabled={sendingWebhook === c.id}
+                            className="p-1.5 rounded-md hover:bg-emerald-500/10 transition-colors disabled:opacity-50" title="Sincronizar Financeiro via IA">
+                            <CreditCard className={`w-4 h-4 ${sendingWebhook === c.id ? 'text-muted-foreground animate-pulse' : 'text-emerald-500'}`} />
                           </button>
                         </div>
                       </td>

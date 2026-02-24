@@ -203,6 +203,10 @@ export interface LlmContractAnalysis {
     valorTotal?: string;
     /** Human-readable explanation of how valorTotal was calculated. */
     breakdownValor?: string;
+    /** Total number of installments (prestações) identified in the contract. */
+    qtdParcelas?: number;
+    /** Fine percentage for late payments (multa por atraso). */
+    multaPercentual?: number;
     /** The CONTRATANTE company (the one hiring/contracting the service). */
     empresaContratante?: string;
     /** The CONTRATADA company (the one providing the service). */
@@ -230,6 +234,8 @@ const CONTRACT_ANALYSIS_PROMPT = `Você é um analista jurídico especializado e
   "valorMensalidade": "R$ 500,00",
   "valorTotal": "R$ 8.000,00",
   "breakdownValor": "Implantação R$ 2.000,00 + Mensalidade R$ 500,00 × 12 meses = R$ 8.000,00",
+  "qtdParcelas": 12,
+  "multaPercentual": 2,
   "empresaContratante": "nome da empresa CONTRATANTE (quem está contratando o serviço)",
   "empresaContratada": "nome da empresa CONTRATADA (quem presta o serviço)",
   "tipoServico": "Serviço|Fornecimento|Obra|Consultoria|Locação",
@@ -290,13 +296,22 @@ REGRAS CRÍTICAS:
    - Identifique riscos financeiros: ausência de reajuste, multas desproporcionais, etc.
    - Array vazio se nenhuma vulnerabilidade encontrada.
 
-8. CONTRATOS DE LOCAÇÃO:
+89. CONTRATOS DE LOCAÇÃO:
    - Se o contrato for do tipo "Locação" (especialmente Locação de Imóvel):
      * A REGRAL GERAL é que o valorTotal seja o valor que consta na cláusula "Do Valor" (geralmente o valor global do contrato).
      * PARA LOCAÇÃO, o "valor da prestação" (valorMensalidade) deve ser igual ao valor global total se não houver divisão explícita.
      * PARA LOCAÇÃO DE IMÓVEL, identifique o contratante (locatário) e o contratada (locador).
 
-9. JSON APENAS: Não inclua nenhum texto fora do objeto JSON.`;
+10. MULTAS E JUROS:
+    - multaPercentual: Identifique a porcentagem de multa moratória por atraso no pagamento (geralmente 2% ou 10%). Retorne apenas o número.
+    - Se houver multa de rescisão, mencione-a em "alertas" ou "clausulasAbusivas", mas não use no campo multaPercentual.
+
+11. QUANTIDADE DE PRESTAÇÕES (qtdParcelas):
+    - Identifique o número total de pagamentos previstos.
+    - Se for recorrente mensal por X meses, qtdParcelas = X.
+    - Se houver taxa de adesão + X parcelas, qtdParcelas = X + 1.
+
+12. JSON APENAS: Não inclua nenhum texto fora do objeto JSON.`;
 
 /** Adds N months to an ISO date string (YYYY-MM-DD) and returns the result as YYYY-MM-DD. */
 function addMonthsToIso(isoDate: string, months: number): string {
@@ -371,6 +386,8 @@ export async function analyzeContractWithLlm(
             valorMensalidade: parsed.valorMensalidade || undefined,
             valorTotal: parsed.valorTotal || undefined,
             breakdownValor: parsed.breakdownValor || undefined,
+            qtdParcelas: parsed.qtdParcelas ? Number(parsed.qtdParcelas) : undefined,
+            multaPercentual: parsed.multaPercentual ? Number(parsed.multaPercentual) : undefined,
             empresaContratante: parsed.empresaContratante || undefined,
             empresaContratada: parsed.empresaContratada || undefined,
             empresa: parsed.empresa || parsed.empresaContratante || parsed.empresaContratada || undefined,
