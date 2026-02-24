@@ -26,8 +26,17 @@ import { motion } from "framer-motion";
 // ─── Helpers ────────────────────────────────────────────────
 function parseCurrency(val: string): number {
   if (!val) return 0;
-  return parseFloat(val.replace(/[^\d,.-]/g, "").replace(",", ".")) || 0;
+  // Remove currency symbol, then handle Brazilian format: dots as thousand separators, comma as decimal
+  // If there's a comma, it's definitely Brazil/Europe format.
+  let cleaned = val.replace(/[^\d,.-]/g, "");
+  if (cleaned.includes(",") && cleaned.includes(".")) {
+    cleaned = cleaned.replace(/\./g, "").replace(",", ".");
+  } else if (cleaned.includes(",")) {
+    cleaned = cleaned.replace(",", ".");
+  }
+  return parseFloat(cleaned) || 0;
 }
+
 
 function formatCurrency(val: number): string {
   return val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -312,35 +321,23 @@ export default function Financeiro() {
                         <TableCell className="text-right font-mono">{c.valorPrestacao || "—"}</TableCell>
                         <TableCell className="text-center">{qtdPrestacoes || "—"}</TableCell>
                         <TableCell className="text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            {pagas > 0 ? (
-                              <div className="flex items-center gap-1">
-                                <div className="flex -space-x-1">
-                                  {[...Array(Math.min(pagas, 5))].map((_, i) => (
-                                    <div key={i} className="w-2.5 h-2.5 rounded-full bg-green-500 border border-background" />
-                                  ))}
-                                </div>
-                                {pendentes > 0 && (
-                                  <div className="flex -space-x-1 ml-0.5">
-                                    {[...Array(Math.min(pendentes, 3))].map((_, i) => (
-                                      <div key={i} className="w-2.5 h-2.5 rounded-full bg-yellow-400 border border-background" />
-                                    ))}
-                                  </div>
-                                )}
-                                <span className="text-[9px] text-muted-foreground ml-1">{pagas}/{qtdPrestacoes}</span>
-                              </div>
-                            ) : qtdPrestacoes > 0 ? (
-                              <div className="flex items-center gap-1">
-                                {[...Array(Math.min(pendentes, 3))].map((_, i) => (
-                                  <div key={i} className="w-2.5 h-2.5 rounded-full bg-yellow-400 border border-background" />
-                                ))}
-                                <span className="text-[9px] text-muted-foreground">0/{qtdPrestacoes}</span>
-                              </div>
-                            ) : (
-                              <div className="w-2.5 h-2.5 rounded-full bg-muted" />
-                            )}
+                          <div className="flex flex-col items-center justify-center">
+                            <span className="text-xs font-semibold text-foreground">{pagas}/{qtdPrestacoes}</span>
+                            <div className="flex gap-0.5 mt-1">
+                              {[...Array(Math.min(qtdPrestacoes, 12))].map((_, i) => (
+                                <div
+                                  key={i}
+                                  className={cn(
+                                    "w-1.5 h-1.5 rounded-full",
+                                    i < pagas ? "bg-green-500" : "bg-muted"
+                                  )}
+                                />
+                              ))}
+                              {qtdPrestacoes > 12 && <span className="text-[8px] text-muted-foreground">+</span>}
+                            </div>
                           </div>
                         </TableCell>
+
                         <TableCell>
                           {pendentes > 0 ? (
                             <div className="flex items-center gap-1.5 text-destructive font-medium text-xs">
@@ -388,18 +385,29 @@ export default function Financeiro() {
             {contratoSelecionado && (
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mt-2">
                 <div className="text-sm text-muted-foreground space-y-1">
+                  <p><strong>Contrato Nº:</strong> {contratoSelecionado.numero}</p>
                   <p><strong>Empresa:</strong> {contratoSelecionado.empresa}</p>
                   <p><strong>Valor Total:</strong> {contratoSelecionado.valor}</p>
-                  <p><strong>Valor da Prestação:</strong> {contratoSelecionado.valorPrestacao || "—"}</p>
+                  <p><strong>Prestações:</strong> {parcelasContrato.length || contratoSelecionado.qtdPagamentos || "—"}</p>
                   <p><strong>Vigência:</strong> {contratoSelecionado.dataInicio} — {contratoSelecionado.dataVencimento}</p>
-                  <p><strong>Qtd. Prestações:</strong> {parcelasContrato.length || contratoSelecionado.qtdPagamentos || "—"}</p>
                 </div>
                 <div className="flex flex-col gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-primary border-primary/20 hover:bg-primary/5"
+                    onClick={() => {
+                      toast({ title: "Relatório Gerado", description: "O relatório financeiro foi enviado para processamento." });
+                    }}
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    Gerar Relatório
+                  </Button>
                   {parcelasContrato.some(p => p.status === "pendente") && (
                     <Button
                       size="sm"
-                      variant="outline"
-                      className="text-green-600 border-green-200 hover:bg-green-50"
+                      variant="default"
+                      className="bg-green-600 hover:bg-green-700"
                       onClick={() => {
                         parcelasContrato.filter(p => p.status === "pendente").forEach(p => handleBaixaParcela(p.id));
                         toast({ title: "Contrato Liquidado", description: "Todas as prestações foram marcadas como pagas." });
@@ -410,26 +418,53 @@ export default function Financeiro() {
                     </Button>
                   )}
                 </div>
+
               </div>
             )}
           </DialogHeader>
 
           {/* Summary bar inside dialog */}
           {parcelasContrato.length > 0 && (
-            <div className="grid grid-cols-3 gap-3 p-3 rounded-lg bg-muted/50 text-sm">
+            <div className="grid grid-cols-5 gap-3 p-3 rounded-lg bg-muted/50 text-sm">
               <div className="text-center">
-                <p className="text-muted-foreground text-xs">Total</p>
+                <p className="text-muted-foreground text-[10px] uppercase tracking-wider">Total</p>
                 <p className="font-bold">{parcelasContrato.length}</p>
               </div>
               <div className="text-center">
-                <p className="text-muted-foreground text-xs">Pagas</p>
+                <p className="text-muted-foreground text-[10px] uppercase tracking-wider">Pagas</p>
                 <p className="font-bold text-green-600">{parcelasContrato.filter(p => p.status === "pago" || p.quitado).length}</p>
               </div>
               <div className="text-center">
-                <p className="text-muted-foreground text-xs">Pendentes</p>
+                <p className="text-muted-foreground text-[10px] uppercase tracking-wider">Aberto</p>
                 <p className="font-bold text-yellow-600">{parcelasContrato.filter(p => p.status === "pendente" && !p.quitado).length}</p>
               </div>
+              <div className="text-center">
+                <p className="text-muted-foreground text-[10px] uppercase tracking-wider">Vencidas</p>
+                <p className="font-bold text-destructive">
+                  {parcelasContrato.filter(p => {
+                    if (p.status === 'pago') return false;
+                    const venc = new Date(p.dataVencimento);
+                    return venc < new Date();
+                  }).length}
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-muted-foreground text-[10px] uppercase tracking-wider text-destructive">Soma Atraso</p>
+                <p className="font-bold text-destructive font-mono">
+                  {parcelasContrato.reduce((acc, p) => {
+                    if (p.status === 'pago' || p.quitado) return acc;
+                    const venc = new Date(p.dataVencimento);
+                    if (venc < new Date()) {
+                      const diff = Math.floor((new Date().getTime() - venc.getTime()) / (1000 * 60 * 60 * 24));
+                      return acc + diff;
+                    }
+                    return acc;
+                  }, 0)}d
+                </p>
+              </div>
             </div>
+
+
           )}
 
           {parcelasContrato.length === 0 ? (
@@ -459,8 +494,16 @@ export default function Financeiro() {
                       </div>
                       <div>
                         <p className="text-sm font-semibold font-mono">{p.valor}</p>
-                        <p className="text-[10px] text-muted-foreground">Vencimento: {p.dataVencimento}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-[10px] text-muted-foreground">Vencimento: {p.dataVencimento}</p>
+                          {!isPago && new Date(p.dataVencimento) < new Date() && (
+                            <span className="text-[10px] text-destructive font-bold">
+                              ({Math.floor((new Date().getTime() - new Date(p.dataVencimento).getTime()) / (1000 * 60 * 60 * 24))} dias de atraso)
+                            </span>
+                          )}
+                        </div>
                       </div>
+
                     </div>
 
                     <div className="flex items-center gap-2">
