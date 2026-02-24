@@ -12,15 +12,13 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
-import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
   DollarSign, FileText, CheckCircle2, AlertTriangle,
   Search, Eye, Printer, Calendar
 } from "lucide-react";
+import GestaoFinanceira from "@/components/GestaoFinanceira";
 
 // ─── Helpers ────────────────────────────────────────────────
 function parseCurrency(val: any): number {
@@ -318,115 +316,13 @@ export default function Financeiro() {
         </Table>
       </div>
 
-      <Dialog open={!!selectedContrato} onOpenChange={() => setSelectedContrato(null)}>
-        <DialogContent className="max-w-2xl p-0 overflow-hidden border-none shadow-2xl">
-          <DialogHeader className="p-6 bg-primary text-primary-foreground">
-            <div className="flex justify-between items-start">
-              <div>
-                <DialogTitle className="text-xl font-bold flex items-center gap-2">
-                  <Calendar className="w-5 h-5" /> Gestão Financeira
-                </DialogTitle>
-                <div className="mt-2 text-primary-foreground/80">
-                  <p className="text-sm font-semibold">{contratoSelecionado?.empresa}</p>
-                  <p className="text-xs">CONTRATO: {contratoSelecionado?.numero}</p>
-                </div>
-              </div>
-              <Button onClick={handlePrintReport} size="sm" variant="secondary" className="gap-2 shrink-0">
-                <Printer className="w-4 h-4" /> Relatório
-              </Button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 mt-6 pt-6 border-t border-primary-foreground/20">
-              <div>
-                <p className="text-[10px] uppercase font-bold text-primary-foreground/60 tracking-wider">Valor do Contrato</p>
-                <p className="text-lg font-bold">{contratoSelecionado?.valor}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-[10px] uppercase font-bold text-primary-foreground/60 tracking-wider">Saldo a Pagar</p>
-                <p className="text-lg font-bold">
-                  {formatCurrency(parcelasContrato.filter(p => !p.quitado).reduce((acc, p) => acc + parseCurrency(p.valor), 0))}
-                </p>
-              </div>
-            </div>
-          </DialogHeader>
-
-          <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
-            {parcelasContrato.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <FileText className="w-12 h-12 mx-auto opacity-20 mb-3" />
-                <p className="italic">Nenhuma parcela localizada para este contrato</p>
-              </div>
-            ) : (
-              <div className="grid gap-3">
-                {parcelasContrato.map(p => {
-                  const daysLate = calculateDaysLate(p.dataVencimento);
-                  const isLate = !p.quitado && daysLate > 0;
-
-                  return (
-                    <div
-                      key={p.id}
-                      className={cn(
-                        "flex items-center justify-between p-4 rounded-xl border transition-all",
-                        p.quitado
-                          ? "bg-emerald-50/30 border-emerald-100 dark:bg-emerald-950/20 dark:border-emerald-900/30 opacity-80"
-                          : (isLate ? "bg-rose-50/50 border-rose-100 dark:bg-rose-950/20 dark:border-rose-900/30" : "bg-card border-border")
-                      )}
-                    >
-                      <div className="flex gap-4 items-center">
-                        <div className={cn(
-                          "w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-sm",
-                          p.quitado ? "bg-emerald-500 text-white" : (isLate ? "bg-rose-500 text-white" : "bg-muted text-muted-foreground")
-                        )}>
-                          {p.numero}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="font-mono font-bold text-base">{p.valor}</p>
-                            {p.quitado && <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-none">PAGO</Badge>}
-                          </div>
-                          <p className="text-xs text-muted-foreground">Vencimento: {p.dataVencimento}</p>
-                          {isLate && (
-                            <p className="text-[10px] font-bold text-rose-600 mt-1 uppercase flex items-center gap-1">
-                              <AlertTriangle className="w-3 h-3" /> {daysLate} dias em atraso
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        {p.quitado ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEstornarParcela(p.id)}
-                            className="border-emerald-200 hover:bg-emerald-50 dark:border-emerald-900 dark:hover:bg-emerald-950/40 text-emerald-700 h-9"
-                          >
-                            Estornar
-                          </Button>
-                        ) : (
-                          <Button
-                            size="sm"
-                            onClick={() => handleBaixaParcela(p.id)}
-                            className={cn(
-                              "h-9 px-4 gap-2",
-                              isLate ? "bg-rose-600 hover:bg-rose-700" : "bg-emerald-600 hover:bg-emerald-700"
-                            )}
-                          >
-                            <CheckCircle2 className="w-4 h-4" /> Liquidar
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-          <div className="p-4 bg-muted/30 border-t flex justify-center">
-            <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">IAX Experience Financial Management</p>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {contratoSelecionado && (
+        <GestaoFinanceira
+          contrato={contratoSelecionado}
+          open={!!selectedContrato}
+          onClose={() => setSelectedContrato(null)}
+        />
+      )}
     </div>
   );
 }
