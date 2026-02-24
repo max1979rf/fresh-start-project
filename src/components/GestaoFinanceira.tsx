@@ -360,7 +360,7 @@ export default function GestaoFinanceira({ contrato, open, onClose }: GestaoFina
 
   return (
     <Dialog open={open} onOpenChange={() => onClose()}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-none w-screen h-screen m-0 rounded-none overflow-y-auto flex flex-col p-6">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <DollarSign className="w-5 h-5 text-primary" />
