@@ -905,11 +905,6 @@ export default function Contratos() {
                     <input value={valor} disabled
                       className="w-full px-3 py-2 rounded-lg border border-input bg-muted text-sm outline-none font-semibold cursor-not-allowed" />
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-muted-foreground">Multa (%)</label>
-                    <input type="number" step="0.01" value={multaPercentual} onChange={(e) => setMultaPercentual(parseFloat(e.target.value) || 0)} placeholder="0,00%"
-                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring" />
-                  </div>
                 </div>
               )}
             </div>
@@ -1019,7 +1014,7 @@ export default function Contratos() {
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground hidden md:table-cell">Valor</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Parcelas</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground hidden lg:table-cell">Vencidas</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground hidden lg:table-cell">Multas</th>
+                
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Status</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground hidden xl:table-cell">Vencimento</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Ações</th>
@@ -1066,29 +1061,6 @@ export default function Contratos() {
                               {vencidas}
                             </span>
                           ) : <span className="text-muted-foreground text-xs">—</span>;
-                        })()}
-                      </td>
-                      <td className="px-5 py-3.5 hidden lg:table-cell">
-                        {(() => {
-                          const vencidas = contratoParcelas.filter(p => {
-                            if (p.status === 'pago') return false;
-                            const venc = p.dataVencimento.includes('-') ? new Date(p.dataVencimento) : brToIso(p.dataVencimento) ? new Date(brToIso(p.dataVencimento)) : null;
-                            if (!venc) return false;
-                            return venc < new Date();
-                          }).length;
-
-                          if (vencidas === 0) return <span className="text-muted-foreground text-xs">—</span>;
-
-                          // Calculate fine base value if multaPercentual exists
-                          const multaBase = (c.multaPercentual || 0) > 0 ? (vencidas * (parseCurrency(c.valorPrestacao || "0") * (c.multaPercentual || 0) / 100)) : 0;
-
-                          return multaBase > 0 ? (
-                            <span className="text-destructive font-semibold text-xs" title={`${c.multaPercentual}% de multa identificada`}>
-                              {formatCurrency(multaBase)}
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground text-xs italic">({c.multaPercentual || 0}%)</span>
-                          );
                         })()}
                       </td>
                       <td className="px-5 py-3.5">
