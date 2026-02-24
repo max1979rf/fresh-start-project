@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from "react";
+import type { AppConfig } from "../types";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link } from "react-router-dom";
 import {
@@ -54,11 +55,13 @@ const SEVERITY_LABEL: Record<string, string> = {
   alta: "Alta", media: "Média", baixa: "Baixa",
 };
 
-// ─── System prompt ────────────────────────────────────────────────
-
-const CHAT_SYSTEM_PROMPT = `Você é um assistente jurídico especializado em análise de contratos brasileiros.
+// ─── Build system prompt merging training from settings ────────
+function buildChatSystemPrompt(config: AppConfig): string {
+  let prompt = `Você é um assistente jurídico especializado em análise de contratos brasileiros.
 Quando o usuário enviar um contrato para análise, identifique:
 - Cláusulas abusivas (multas excessivas, renúncia de direitos, rescisão unilateral, etc.)
+- Assinaturas ausentes ou campos em branco
+- Vulnerabilidades jurídicas (falta de foro, LGPD, confidencialidade, etc.)
 - Valor contratual
 - Nome das partes (contratante e contratada)
 - Data de início e fim do contrato
@@ -66,6 +69,28 @@ Quando o usuário enviar um contrato para análise, identifique:
 - Alertas e observações importantes
 Seja detalhado e use linguagem jurídica formal em português do Brasil.
 Quando o usuário pedir para gerar um contrato, gere o texto completo com cláusulas profissionais.`;
+
+  // Merge custom training from Configurações
+  if (config.llmCustomPrompt) {
+    prompt += `\n\nINSTRUÇÕES DE TREINAMENTO PERSONALIZADO:\n${config.llmCustomPrompt}`;
+  }
+  if (config.llmKnowledgeBase) {
+    prompt += `\n\nBASE DE CONHECIMENTO:\n${config.llmKnowledgeBase}`;
+  }
+  if (config.llmTone) {
+    prompt += `\n\nTOM DE VOZ: ${config.llmTone}`;
+  }
+  if (config.llmSpecialization) {
+    prompt += `\n\nESPECIALIZAÇÃO: ${config.llmSpecialization}`;
+  }
+  if (config.llmExamples && config.llmExamples.length > 0) {
+    prompt += `\n\nEXEMPLOS DE COMPORTAMENTO:\n`;
+    config.llmExamples.forEach((ex, i) => {
+      prompt += `Exemplo ${i + 1}:\nUsuário: ${ex.user}\nAssistente: ${ex.assistant}\n\n`;
+    });
+  }
+  return prompt;
+}
 
 // ─── Component ───────────────────────────────────────────────────
 
@@ -92,6 +117,7 @@ export default function ChatIA() {
   // Derived
   const llmConnected = appConfig.llmStatus === 'connected' && !!appConfig.llmApiKey;
   const providerLabel = appConfig.llmProvider?.toUpperCase() ?? '';
+  const hasTraining = !!(appConfig.llmCustomPrompt || appConfig.llmKnowledgeBase || appConfig.llmTone || appConfig.llmSpecialization || (appConfig.llmExamples && appConfig.llmExamples.length > 0));
 
   // ── Local fallback ──
   function generateLocalResponse(userMsg: string): string {
@@ -129,7 +155,7 @@ export default function ChatIA() {
 
     try {
       const apiMessages = [...chatMessages, userMsg].map(m => ({ role: m.role, content: m.content }));
-      const llmResponse = await callLlmApi(appConfig, apiMessages, CHAT_SYSTEM_PROMPT);
+      const llmResponse = await callLlmApi(appConfig, apiMessages, buildChatSystemPrompt(appConfig));
 
       let response: string;
       if (llmResponse) {
@@ -313,6 +339,14 @@ export default function ChatIA() {
         lines.push(`\nCLÁUSULAS ABUSIVAS (${llmAnalysis.clausulasAbusivas.length}):`);
         llmAnalysis.clausulasAbusivas.forEach(c => lines.push(`[${c.severidade.toUpperCase()}] ${c.descricao}`));
       }
+      if (llmAnalysis.assinaturasAusentes.length > 0) {
+        lines.push(`\nASSINATURAS AUSENTES (${llmAnalysis.assinaturasAusentes.length}):`);
+        llmAnalysis.assinaturasAusentes.forEach(a => lines.push(`• ${a}`));
+      }
+      if (llmAnalysis.vulnerabilidades.length > 0) {
+        lines.push(`\nVULNERABILIDADES (${llmAnalysis.vulnerabilidades.length}):`);
+        llmAnalysis.vulnerabilidades.forEach(v => lines.push(`• ${v}`));
+      }
       if (llmAnalysis.alertas.length > 0) {
         lines.push(`\nOBSERVAÇÕES:`);
         llmAnalysis.alertas.forEach(a => lines.push(`• ${a}`));
@@ -357,9 +391,16 @@ export default function ChatIA() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {llmConnected ? (
-            <span className="text-xs px-2.5 py-1 rounded-full bg-success/10 text-success font-medium">
-              🟢 {providerLabel} — {appConfig.llmModel ?? 'modelo padrão'}
-            </span>
+            <>
+              <span className="text-xs px-2.5 py-1 rounded-full bg-success/10 text-success font-medium">
+                🟢 {providerLabel} — {appConfig.llmModel ?? 'modelo padrão'}
+              </span>
+              {hasTraining && (
+                <span className="text-xs px-2.5 py-1 rounded-full bg-primary/10 text-primary font-medium">
+                  🎓 Treinamento ativo
+                </span>
+              )}
+            </>
           ) : (
             <Link
               to="/configuracoes"
@@ -719,6 +760,59 @@ export default function ChatIA() {
                     </div>
                   )}
 
+                  {/* Assinaturas Ausentes — LLM */}
+                  {llmAnalysis && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                          Assinaturas Ausentes
+                        </p>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                          llmAnalysis.assinaturasAusentes.length > 0
+                            ? 'bg-destructive/10 text-destructive'
+                            : 'bg-success/10 text-success'
+                        }`}>
+                          {llmAnalysis.assinaturasAusentes.length > 0
+                            ? `${llmAnalysis.assinaturasAusentes.length} problema(s)`
+                            : 'Completas'}
+                        </span>
+                      </div>
+                      {llmAnalysis.assinaturasAusentes.length > 0 ? (
+                        llmAnalysis.assinaturasAusentes.map((a, i) => (
+                          <div key={i} className="flex items-start gap-2 p-2.5 rounded-lg bg-destructive/8 border border-destructive/20 text-xs text-destructive">
+                            <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                            <span className="leading-relaxed">{a}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="flex items-center gap-2 p-2.5 rounded-lg bg-success/8 border border-success/20 text-xs text-success">
+                          <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                          Todas as assinaturas estão presentes.
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Vulnerabilidades — LLM */}
+                  {llmAnalysis && llmAnalysis.vulnerabilidades.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                          Vulnerabilidades Jurídicas
+                        </p>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-warning/10 text-warning">
+                          {llmAnalysis.vulnerabilidades.length} encontrada(s)
+                        </span>
+                      </div>
+                      {llmAnalysis.vulnerabilidades.map((v, i) => (
+                        <div key={i} className="flex items-start gap-2 p-2.5 rounded-lg bg-warning/8 border border-warning/20 text-xs text-warning">
+                          <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                          <span className="leading-relaxed">{v}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   {/* Findings — local analysis (when no LLM) */}
                   {!llmAnalysis && localAnalysis && localAnalysis.findings.length > 0 && (
                     <div className="space-y-2">
@@ -733,7 +827,14 @@ export default function ChatIA() {
                     </div>
                   )}
 
-                  {/* Alertas — LLM */}
+                  {/* Missing signature warning — local */}
+                  {!llmAnalysis && localAnalysis?.missingSignature && (
+                    <div className="flex items-center gap-2 p-2.5 rounded-lg bg-destructive/8 border border-destructive/20 text-xs text-destructive">
+                      <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                      Assinatura pode estar ausente no documento.
+                    </div>
+                  )}
+                  {/* Alertas / Observações — LLM */}
                   {llmAnalysis && llmAnalysis.alertas.length > 0 && (
                     <div className="space-y-2">
                       <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Observações</p>
@@ -743,14 +844,6 @@ export default function ChatIA() {
                           <span className="leading-relaxed">{a}</span>
                         </div>
                       ))}
-                    </div>
-                  )}
-
-                  {/* Missing signature warning */}
-                  {localAnalysis?.missingSignature && (
-                    <div className="flex items-center gap-2 p-2.5 rounded-lg bg-destructive/8 border border-destructive/20 text-xs text-destructive">
-                      <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
-                      Assinatura pode estar ausente no documento.
                     </div>
                   )}
 
