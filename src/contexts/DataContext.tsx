@@ -590,7 +590,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
     const deleteSetor = useCallback((id: string): boolean => {
         if (usuarios.some(u => u.idSetor === id)) return false;
-        if (contratos.some(c => c.idSetor === id)) return false;
+        if (contratos.some(c => c.idSetor === id && !c.excluido)) return false;
         setSetores(prev => prev.filter(s => s.id !== id));
         supabase.from('setores').delete().eq('id', id).then(({ error }) => {
             if (error) console.error('Failed to delete setor:', error);
