@@ -287,6 +287,14 @@ function generateId() {
 // Parse DD/MM/YYYY to Date
 function parseDateBR(str: string): Date | null {
     if (!str) return null;
+    // Handle ISO format YYYY-MM-DD
+    if (str.includes('-')) {
+        const parts = str.split('T')[0].split('-');
+        if (parts.length !== 3) return null;
+        const [y, m, d] = parts.map(Number);
+        return new Date(y, m - 1, d);
+    }
+    // Handle BR format DD/MM/YYYY
     const parts = str.split('/');
     if (parts.length !== 3) return null;
     const [d, m, y] = parts.map(Number);
