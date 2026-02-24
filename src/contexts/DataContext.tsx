@@ -379,9 +379,17 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
                 if (alertasRes.data) setAlertas(alertasRes.data.map(mapAlertaFromDB));
                 if (modelosRes.data) setModelos(modelosRes.data.map(mapModeloFromDB));
 
-                // Load parcelas
+                // Load parcelas — with localStorage fallback if table doesn't exist
                 const parcelasRes = await (supabase as any).from('parcelas').select('*');
-                if (parcelasRes.data) setParcelas(parcelasRes.data.map(mapParcelaFromDB));
+                if (parcelasRes.data) {
+                    setParcelas(parcelasRes.data.map(mapParcelaFromDB));
+                } else if (parcelasRes.error) {
+                    console.warn('Parcelas table not available, using localStorage fallback:', parcelasRes.error.message);
+                    try {
+                        const localParcelas = localStorage.getItem('parcelas_fallback');
+                        if (localParcelas) setParcelas(JSON.parse(localParcelas));
+                    } catch { /* ignore */ }
+                }
 
                 if (configResult) {
                     setAppConfigState(configResult);
@@ -745,51 +753,60 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }, [addAlerta]);
 
     // --- Parcelas ---
+    // Helper to persist parcelas to localStorage as fallback
+    const persistParcelasLocal = useCallback((updatedParcelas: Parcela[]) => {
+        try { localStorage.setItem('parcelas_fallback', JSON.stringify(updatedParcelas)); } catch { /* ignore */ }
+    }, []);
+
     const addParcelas = useCallback((newParcelas: Omit<Parcela, 'id' | 'criadoEm'>[]) => {
         const created = newParcelas.map(p => ({
             ...p,
             id: 'pc_' + generateId(),
             criadoEm: new Date().toISOString(),
         }));
-        setParcelas(prev => [...prev, ...created]);
+        setParcelas(prev => {
+            const updated = [...prev, ...created];
+            persistParcelasLocal(updated);
+            return updated;
+        });
         (supabase as any).from('parcelas').insert(created.map(p => ({
             id: p.id, id_contrato: p.idContrato, numero: p.numero, valor: p.valor,
             data_vencimento: p.dataVencimento, status: p.status, quitado: p.quitado,
             criado_em: p.criadoEm,
-        }))).then(({ error }) => {
-            if (error) console.error('Failed to save parcelas:', error);
+        }))).then(({ error }: any) => {
+            if (error) console.warn('Failed to save parcelas to DB (using localStorage):', error.message);
         });
-    }, []);
+    }, [persistParcelasLocal]);
 
     const updateParcela = useCallback((id: string, data: Partial<Parcela>) => {
-        // Prevent editing paid parcels (security rule)
-        const existing = parcelas.find(p => p.id === id);
-        if (existing?.status === 'pago' && data.status !== 'pago' && !data.quitado) {
-            // Allow only marking as quitado on paid parcels
-        }
-
         const now = new Date().toISOString();
-        setParcelas(prev => prev.map(p => p.id === id ? { ...p, ...data, atualizadoEm: now } : p));
+        setParcelas(prev => {
+            const updated = prev.map(p => p.id === id ? { ...p, ...data, atualizadoEm: now } : p);
+            persistParcelasLocal(updated);
+            return updated;
+        });
         const dbUpdate: Record<string, unknown> = { atualizado_em: now };
         if (data.valor !== undefined) dbUpdate.valor = data.valor;
         if (data.dataVencimento !== undefined) dbUpdate.data_vencimento = data.dataVencimento;
         if (data.status !== undefined) dbUpdate.status = data.status;
         if (data.quitado !== undefined) dbUpdate.quitado = data.quitado;
         (supabase as any).from('parcelas').update(dbUpdate).eq('id', id).then(({ error }: any) => {
-            if (error) console.error('Failed to update parcela:', error);
+            if (error) console.warn('Failed to update parcela in DB (using localStorage):', error.message);
         });
-    }, [parcelas]);
+    }, [parcelas, persistParcelasLocal]);
 
     const deleteParcela = useCallback((id: string) => {
-        // Prevent deleting paid parcels (security rule)
         const existing = parcelas.find(p => p.id === id);
         if (existing?.status === 'pago') return;
-
-        setParcelas(prev => prev.filter(p => p.id !== id));
-        (supabase as any).from('parcelas').delete().eq('id', id).then(({ error }: any) => {
-            if (error) console.error('Failed to delete parcela:', error);
+        setParcelas(prev => {
+            const updated = prev.filter(p => p.id !== id);
+            persistParcelasLocal(updated);
+            return updated;
         });
-    }, [parcelas]);
+        (supabase as any).from('parcelas').delete().eq('id', id).then(({ error }: any) => {
+            if (error) console.warn('Failed to delete parcela from DB (using localStorage):', error.message);
+        });
+    }, [parcelas, persistParcelasLocal]);
 
     const getParcelasContrato = useCallback((idContrato: string): Parcela[] => {
         return parcelas.filter(p => p.idContrato === idContrato).sort((a, b) => a.numero - b.numero);
