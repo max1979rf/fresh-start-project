@@ -12,15 +12,13 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
-import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
   DollarSign, FileText, CheckCircle2, Clock, AlertTriangle,
   Search, Eye, Building2, Filter, Printer
 } from "lucide-react";
+import GestaoFinanceira from "@/components/GestaoFinanceira";
 
 // ─── Helpers ────────────────────────────────────────────────
 function parseCurrency(val: any): number {
@@ -245,46 +243,13 @@ export default function Financeiro() {
         </TableBody>
       </Table>
 
-      <Dialog open={!!selectedContrato} onOpenChange={() => setSelectedContrato(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader><DialogTitle>Gestão de Parcelas</DialogTitle></DialogHeader>
-          <div className="space-y-4 pt-4">
-            {contratoSelecionado && (
-              <div className="bg-muted p-3 rounded-lg flex justify-between items-center">
-                <div>
-                  <p className="text-[10px] uppercase font-bold text-muted-foreground">Contrato</p>
-                  <p className="font-bold text-sm">{contratoSelecionado.numero}</p>
-                </div>
-                <Button onClick={handlePrintReport} size="sm" variant="outline"><Printer className="w-4 h-4 mr-2" /> Relatório</Button>
-              </div>
-            )}
-            <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-2">
-              {parcelasContrato.map(p => (
-                <div key={p.id} className="flex items-center justify-between p-3 border rounded-lg bg-card text-sm">
-                  <div className="flex gap-4 items-center">
-                    <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center font-bold text-xs">{p.numero}</div>
-                    <div>
-                      <p className="font-mono font-bold">{p.valor}</p>
-                      <p className="text-[10px] text-muted-foreground">{p.dataVencimento}</p>
-                    </div>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant={p.quitado ? "outline" : "default"}
-                    onClick={() => p.quitado ? handleEstornarParcela(p.id) : handleBaixaParcela(p.id)}
-                    className={p.quitado ? "" : "bg-emerald-600 hover:bg-emerald-700 h-8"}
-                  >
-                    {p.quitado ? "Estornar" : "Liquidar"}
-                  </Button>
-                </div>
-              ))}
-              {parcelasContrato.length === 0 && (
-                <p className="text-center py-8 text-muted-foreground italic">Nenhuma parcela vinculada.</p>
-              )}
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {contratoSelecionado && (
+        <GestaoFinanceira
+          contrato={contratoSelecionado}
+          open={!!selectedContrato}
+          onClose={() => setSelectedContrato(null)}
+        />
+      )}
     </div>
   );
 }
