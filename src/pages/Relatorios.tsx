@@ -75,7 +75,7 @@ export default function Relatorios() {
     const handleExportDocx = async () => {
         const data = reportType === 'contratos' && selectedContratos.size > 0
             ? (reportData as typeof contratos).filter(c => selectedContratos.has(c.id))
-            : reportData as any[];
+            : reportData as unknown[];
         if (!data || data.length === 0) return;
 
         const now = new Date();
