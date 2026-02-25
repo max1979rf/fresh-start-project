@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Monitor, Clock, CheckCircle2, Bell, DoorOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 const CHANNEL_NAME = "fresh-start-patient-calls";
 
@@ -33,7 +34,9 @@ const PainelChamada = () => {
     });
     const [animKey, setAnimKey] = useState(0);
     const [time, setTime] = useState(new Date());
-    const [audioEnabled, setAudioEnabled] = useState(false);
+    const [audioEnabled, setAudioEnabled] = useState(() => {
+        return localStorage.getItem("panel_audio_enabled") === "true";
+    });
 
     // Clock
     useEffect(() => {
@@ -140,20 +143,40 @@ const PainelChamada = () => {
                     </div>
                 </div>
                 <div className="flex items-center gap-6">
-                    {!audioEnabled && (
-                        <button
-                            onClick={() => {
-                                setAudioEnabled(true);
+                    <button
+                        onClick={() => {
+                            const newState = !audioEnabled;
+                            setAudioEnabled(newState);
+                            localStorage.setItem("panel_audio_enabled", String(newState));
+
+                            if (newState) {
+                                // Unlock audio context
                                 const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
                                 const ctx = new AudioContextClass();
                                 const osc = ctx.createOscillator();
                                 osc.connect(ctx.destination);
                                 osc.start(0);
                                 osc.stop(0.1);
-                            }}
-                            className="px-6 py-2.5 rounded-full text-sm font-bold transition-all bg-primary animate-pulse accent-glow"
+                                toast.success("Áudio ativado para este navegador");
+                            }
+                        }}
+                        className={cn(
+                            "px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2",
+                            audioEnabled
+                                ? "bg-white/5 border border-white/10 text-white/60 hover:bg-white/10"
+                                : "bg-primary animate-pulse text-primary-foreground accent-glow"
+                        )}
+                    >
+                        {audioEnabled ? "🔊 ÁUDIO ATIVO" : "🔈 ATIVAR ÁUDIO"}
+                    </button>
+
+                    {audioEnabled && (
+                        <button
+                            onClick={() => playFeedback("Teste de Áudio", "Consultório de Teste")}
+                            className="p-2.5 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors"
+                            title="Testar som"
                         >
-                            🔈 ATIVAR ÁUDIO DO PAINEL
+                            <Bell className="w-5 h-5 text-primary" />
                         </button>
                     )}
                     <div className="flex items-center gap-3 bg-white/5 px-5 py-2.5 rounded-2xl border border-white/5">

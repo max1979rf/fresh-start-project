@@ -14,7 +14,9 @@ const ChamadaIndividual = () => {
     const [roomName, setRoomName] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [time, setTime] = useState(new Date());
-    const [audioEnabled, setAudioEnabled] = useState(false);
+    const [audioEnabled, setAudioEnabled] = useState(() => {
+        return localStorage.getItem("individual_audio_enabled") === "true";
+    });
 
     // Clock
     useEffect(() => {
@@ -116,17 +118,22 @@ const ChamadaIndividual = () => {
         };
     }, [id, audioEnabled]);
 
-    const enableAudio = () => {
-        setAudioEnabled(true);
-        try {
-            const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-            const ctx = new AudioContextClass();
-            const osc = ctx.createOscillator();
-            osc.connect(ctx.destination);
-            osc.frequency.setValueAtTime(440, ctx.currentTime);
-            osc.start(ctx.currentTime);
-            osc.stop(ctx.currentTime + 0.1);
-        } catch (e) { }
+    const toggleAudio = () => {
+        const newState = !audioEnabled;
+        setAudioEnabled(newState);
+        localStorage.setItem("individual_audio_enabled", String(newState));
+
+        if (newState) {
+            try {
+                const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+                const ctx = new AudioContextClass();
+                const osc = ctx.createOscillator();
+                osc.connect(ctx.destination);
+                osc.frequency.setValueAtTime(440, ctx.currentTime);
+                osc.start(ctx.currentTime);
+                osc.stop(ctx.currentTime + 0.1);
+            } catch (e) { }
+        }
     };
 
     if (loading) {
@@ -173,14 +180,16 @@ const ChamadaIndividual = () => {
                     </div>
                 </div>
                 <div className="flex items-center gap-6">
-                    {!audioEnabled && (
-                        <Button
-                            onClick={enableAudio}
-                            className="bg-primary text-primary-foreground font-bold animate-pulse px-6 h-9 rounded-full text-xs"
-                        >
-                            🔈 ATIVAR ÁUDIO
-                        </Button>
-                    )}
+                    <Button
+                        onClick={toggleAudio}
+                        variant={audioEnabled ? "outline" : "default"}
+                        className={cn(
+                            "font-bold px-6 h-9 rounded-full text-xs transition-all",
+                            !audioEnabled && "animate-pulse bg-primary text-primary-foreground"
+                        )}
+                    >
+                        {audioEnabled ? "🔊 ÁUDIO ATIVO" : "🔈 ATIVAR ÁUDIO"}
+                    </Button>
                     <div className="flex items-center gap-3">
                         <Clock className="w-4 h-4 text-primary" />
                         <span className="font-mono font-bold text-xl">
