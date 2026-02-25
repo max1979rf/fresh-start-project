@@ -18,17 +18,12 @@ import {
   Coins,
   MessageSquare,
   DollarSign,
-  DoorOpen,
-  Megaphone,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useData } from "../contexts/DataContext";
 
 const allNavItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard", adminOnly: false },
-  { to: "/pacientes", icon: Users, label: "Pacientes", adminOnly: false },
-  { to: "/consultorios", icon: DoorOpen, label: "Consultórios", adminOnly: false },
-  { to: "/chamar-paciente", icon: Megaphone, label: "Chamar Paciente", adminOnly: false },
   { to: "/contratos", icon: FileText, label: "Contratos", adminOnly: false },
   { to: "/chat-ia", icon: MessageSquare, label: "Chat IA", adminOnly: false },
   { to: "/modelos", icon: BookOpen, label: "Modelos", adminOnly: false },

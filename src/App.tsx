@@ -21,12 +21,6 @@ import ChatIA from "./pages/ChatIA";
 import Financeiro from "./pages/Financeiro";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
-import { PatientCallProvider } from "./contexts/PatientCallContext";
-import Pacientes from "./pages/Pacientes";
-import Consultorios from "./pages/Consultorios";
-import ChamarPaciente from "./pages/ChamarPaciente";
-import PainelChamada from "./pages/PainelChamada";
-import ChamadaIndividual from "./pages/ChamadaIndividual";
 
 const queryClient = new QueryClient();
 
@@ -38,41 +32,34 @@ const App = () => (
       <BrowserRouter>
         <DataProvider>
           <AuthProvider>
-            <PatientCallProvider>
-              <Routes>
-                <Route path="/login" element={<Login />} />
-                <Route element={
-                  <ProtectedRoute>
-                    <AppLayout />
-                  </ProtectedRoute>
-                }>
-                  <Route path="/" element={<Dashboard />} />
-                  <Route path="/pacientes" element={<Pacientes />} />
-                  <Route path="/consultorios" element={<Consultorios />} />
-                  <Route path="/chamar-paciente" element={<ChamarPaciente />} />
-                  <Route path="/contratos" element={<Contratos />} />
-                  <Route path="/chat-ia" element={<ChatIA />} />
-                  <Route path="/setores" element={
-                    <ProtectedRoute adminOnly><Setores /></ProtectedRoute>
-                  } />
-                  <Route path="/usuarios" element={
-                    <ProtectedRoute adminOnly><Usuarios /></ProtectedRoute>
-                  } />
-                  <Route path="/financeiro" element={<Financeiro />} />
-                  <Route path="/alertas" element={<Alertas />} />
-                  <Route path="/auditoria" element={
-                    <ProtectedRoute adminOnly><Auditoria /></ProtectedRoute>
-                  } />
-                  <Route path="/configuracoes" element={<Configuracoes />} />
-                  <Route path="/modelos" element={<ModelosContratos />} />
-                  <Route path="/relatorios" element={<Relatorios />} />
-                  <Route path="/creditos" element={<Creditos />} />
-                </Route>
-                <Route path="/painel-chamada" element={<PainelChamada />} />
-                <Route path="/chamada/:id" element={<ChamadaIndividual />} />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </PatientCallProvider>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route element={
+                <ProtectedRoute>
+                  <AppLayout />
+                </ProtectedRoute>
+              }>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/contratos" element={<Contratos />} />
+                <Route path="/chat-ia" element={<ChatIA />} />
+                <Route path="/setores" element={
+                  <ProtectedRoute adminOnly><Setores /></ProtectedRoute>
+                } />
+                <Route path="/usuarios" element={
+                  <ProtectedRoute adminOnly><Usuarios /></ProtectedRoute>
+                } />
+                <Route path="/financeiro" element={<Financeiro />} />
+                <Route path="/alertas" element={<Alertas />} />
+                <Route path="/auditoria" element={
+                  <ProtectedRoute adminOnly><Auditoria /></ProtectedRoute>
+                } />
+                <Route path="/configuracoes" element={<Configuracoes />} />
+                <Route path="/modelos" element={<ModelosContratos />} />
+                <Route path="/relatorios" element={<Relatorios />} />
+                <Route path="/creditos" element={<Creditos />} />
+              </Route>
+              <Route path="*" element={<NotFound />} />
+            </Routes>
           </AuthProvider>
         </DataProvider>
       </BrowserRouter>
