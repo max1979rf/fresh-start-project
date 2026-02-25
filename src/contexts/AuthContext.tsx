@@ -6,7 +6,7 @@ interface AuthContextType {
     currentUser: User | null;
     isAuthenticated: boolean;
     isAdmin: boolean;
-    login: (loginStr: string, password: string) => { success: boolean; error?: string };
+    login: (loginStr: string, password: string) => Promise<{ success: boolean; error?: string }>;
     logout: () => void;
 }
 
@@ -58,7 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     }, [usuarios, currentUser]);
 
-    const login = useCallback((loginStr: string, password: string): { success: boolean; error?: string } => {
+    const login = useCallback(async (loginStr: string, password: string): Promise<{ success: boolean; error?: string }> => {
         const user = findUserByLogin(loginStr);
         if (!user) {
             return { success: false, error: 'Usuário não encontrado.' };
@@ -73,7 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             });
             return { success: false, error: 'Usuário inativo. Entre em contato com o administrador.' };
         }
-        if (!validatePassword(user, password)) {
+        if (!await validatePassword(user, password)) {
             addLog(user.id, user.nome, 'Login falhou', 'Senha incorreta');
             addAlerta({
                 tipo: 'geral',

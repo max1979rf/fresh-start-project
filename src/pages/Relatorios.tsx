@@ -70,7 +70,7 @@ export default function Relatorios() {
 
     // --- DOCX Export ---
     const handleExportDocx = async () => {
-        const data = reportData as any[];
+        const data = reportData as unknown[];
         if (!data || data.length === 0) return;
 
         const now = new Date();

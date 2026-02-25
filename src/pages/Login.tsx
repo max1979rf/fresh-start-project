@@ -28,8 +28,8 @@ export default function Login() {
       return;
     }
     setLoading(true);
-    setTimeout(() => {
-      const result = login(loginStr.trim(), senha);
+    setTimeout(async () => {
+      const result = await login(loginStr.trim(), senha);
       if (result.success) {
         sessionStorage.removeItem('lwp_expiryReminderShown');
         navigate("/", { replace: true });

@@ -3,6 +3,14 @@ import type { AppConfig } from '../types';
 // ─── Shared LLM API call ─────────────────────────────────────────
 // Supports Anthropic, Google Gemini and OpenAI-compatible providers
 
+type AnthropicTextPart = { type: 'text'; text: string };
+type AnthropicImagePart = { type: 'image'; source: { type: 'base64'; media_type: 'image/jpeg'; data: string } };
+type AnthropicContentPart = AnthropicTextPart | AnthropicImagePart;
+
+type GeminiTextPart = { text: string };
+type GeminiInlineDataPart = { inline_data: { mime_type: 'image/jpeg'; data: string } };
+type GeminiPart = GeminiTextPart | GeminiInlineDataPart;
+
 export async function callLlmApi(
     config: AppConfig,
     messages: { role: string; content: string; imageBase64?: string }[],
@@ -50,7 +58,7 @@ export async function callLlmApi(
                     max_tokens: 4096,
                     system: finalSystemPrompt,
                     messages: messages.map((m) => {
-                        const content: any[] = [{ type: 'text', text: m.content }];
+                        const content: AnthropicContentPart[] = [{ type: 'text', text: m.content }];
                         if (m.imageBase64) {
                             content.push({
                                 type: 'image',
@@ -84,7 +92,7 @@ export async function callLlmApi(
 
             // Convert chat messages to Gemini format
             const contents = messages.map((m) => {
-                const parts: any[] = [{ text: m.content }];
+                const parts: GeminiPart[] = [{ text: m.content }];
                 if (m.imageBase64) {
                     parts.push({
                         inline_data: {
@@ -119,8 +127,8 @@ export async function callLlmApi(
 
         // GPTMaker — uses v2/agent/{agentId}/conversation endpoint
         if (config.llmProvider === 'gptmaker') {
-            const agentId = (config as any).gptMakerAgentId;
-            const apiKey = (config as any).gptMakerApiKey || config.llmApiKey;
+            const agentId = config.gptMakerAgentId;
+            const apiKey = config.gptMakerApiKey || config.llmApiKey;
             if (!agentId || !apiKey) return null;
 
             const baseUrl = config.llmBaseUrl || 'https://api.gptmaker.ai';

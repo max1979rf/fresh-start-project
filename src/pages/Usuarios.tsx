@@ -48,7 +48,7 @@ export default function Usuarios() {
         setError(null);
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         setError(null);
         if (!nome.trim() || !login.trim()) { setError("Preencha nome e login."); return; }
         if (!editingId && !senha.trim()) { setError("Defina uma senha para o novo usuário."); return; }
@@ -58,7 +58,7 @@ export default function Usuarios() {
         if (role === 'setor' && !idSetor) { setError("Selecione um perfil com setor para o usuário."); return; }
 
         if (editingId) {
-            const ok = updateUsuario(editingId, {
+            const ok = await updateUsuario(editingId, {
                 nome: nome.trim(),
                 login: login.trim(),
                 idSetor: role === 'admin' ? null : idSetor,
@@ -69,7 +69,7 @@ export default function Usuarios() {
             if (!ok) { setError("Login já existe para outro usuário."); return; }
             addLog(currentUser!.id, currentUser!.nome, 'Usuário editado', `Usuário: ${nome.trim()}`);
         } else {
-            const novo = addUsuario({
+            const novo = await addUsuario({
                 nome: nome.trim(),
                 login: login.trim(),
                 senha: senha.trim(),
