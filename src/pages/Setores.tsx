@@ -40,14 +40,23 @@ export default function Setores() {
     };
 
     const handleDelete = (id: string, nomeSetor: string) => {
-        if (!confirm(`Deseja excluir o setor "${nomeSetor}"?`)) return;
-        const ok = deleteSetor(id);
-        if (!ok) {
-            alert("Não é possível excluir este setor. Existem usuários ou contratos ativos vinculados.");
-            return;
+        const uCount = usersInSetor(id);
+        const cCount = contractsInSetor(id).filter(c => !c.excluido).length;
+
+        let msg = `Deseja excluir o setor "${nomeSetor}"?`;
+        if (uCount > 0 || cCount > 0) {
+            msg = `Existem ${uCount} usuário(s) e ${cCount} contrato(s) ativos vinculados ao setor "${nomeSetor}". Se excluir, eles ficarão sem setor. Deseja continuar?`;
+        } else if (contractsInSetor(id).length > 0) {
+            msg = `O setor "${nomeSetor}" possui apenas registros arquivados. Deseja excluir mesmo assim?`;
         }
+
+        if (!confirm(msg)) return;
+
+        // deleteSetor now handles relaxation and orphaned state
+        deleteSetor(id);
         addLog(currentUser!.id, currentUser!.nome, 'Setor excluído', `Setor: ${nomeSetor}`);
     };
+
 
     const handleEdit = (id: string, nomeAtual: string) => {
         setEditingId(id);

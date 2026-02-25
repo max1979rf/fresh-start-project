@@ -589,14 +589,18 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }, [setores]);
 
     const deleteSetor = useCallback((id: string): boolean => {
-        if (usuarios.some(u => u.idSetor === id)) return false;
-        if (contratos.some(c => c.idSetor === id && !c.excluido)) return false;
         setSetores(prev => prev.filter(s => s.id !== id));
+
+        // Update local state for orphaned records
+        setUsuarios(prev => prev.map(u => u.idSetor === id ? { ...u, idSetor: null } : u));
+        setContratos(prev => prev.map(c => c.idSetor === id ? { ...c, idSetor: null as any } : c));
+
         supabase.from('setores').delete().eq('id', id).then(({ error }) => {
             if (error) console.error('Failed to delete setor:', error);
         });
         return true;
-    }, [usuarios, contratos]);
+    }, [setSetores, setUsuarios, setContratos]);
+
 
     const getSetorNome = useCallback((id: string): string => {
         return setores.find(s => s.id === id)?.nome || '—';
@@ -697,7 +701,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             valor_manutencao_mensal: novo.valorManutencaoMensal ?? null,
             qtd_pagamentos: novo.qtdPagamentos ?? null,
             valor_prestacao: novo.valorPrestacao ?? null,
-            
+
         }).then(({ error }) => {
 
             if (error) {
@@ -742,7 +746,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         if (data.valorManutencaoMensal !== undefined) dbUpdate.valor_manutencao_mensal = data.valorManutencaoMensal ?? null;
         if (data.qtdPagamentos !== undefined) dbUpdate.qtd_pagamentos = data.qtdPagamentos ?? null;
         if (data.valorPrestacao !== undefined) dbUpdate.valor_prestacao = data.valorPrestacao ?? null;
-        
+
         supabase.from('contratos').update(dbUpdate).eq('id', id).then(({ error }) => {
 
             if (error) console.error('Failed to update contrato:', error);
