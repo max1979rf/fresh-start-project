@@ -4,17 +4,7 @@ import type { Setor, User, Contrato, LogEntry, Alerta, AppConfig, ModeloContrato
 import { supabase } from '@/integrations/supabase/client';
 import { saveConfiguracoes, loadConfiguracoes } from '@/services/configService';
 import { brToIso } from '@/utils/dateUtils';
-
-// --- Simple hash for passwords (sync, deterministic) ---
-function simpleHash(str: string): string {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-        const char = str.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
-        hash |= 0;
-    }
-    return 'h_' + Math.abs(hash).toString(36);
-}
+import { hashPassword, verifyPassword, legacyHash } from '@/utils/crypto';
 
 // --- Seed data ---
 const SEED_SETORES: Setor[] = [
@@ -30,10 +20,10 @@ const SEED_SETORES: Setor[] = [
 ];
 
 const SEED_USERS: User[] = [
-    { id: 'u0', nome: 'Administrador', login: 'admin', senhaHash: simpleHash('admin123'), idSetor: null, role: 'admin', status: 'ativo', criadoEm: '2026-01-01T00:00:00' },
-    { id: 'u1', nome: 'Carlos Silva', login: 'carlos', senhaHash: simpleHash('123456'), idSetor: 's1', role: 'setor', status: 'ativo', criadoEm: '2026-01-15T00:00:00' },
-    { id: 'u2', nome: 'Maria Santos', login: 'maria', senhaHash: simpleHash('123456'), idSetor: 's2', role: 'setor', status: 'ativo', criadoEm: '2026-01-15T00:00:00' },
-    { id: 'u3', nome: 'Pedro Lima', login: 'pedro', senhaHash: simpleHash('123456'), idSetor: 's6', role: 'setor', status: 'inativo', criadoEm: '2026-01-20T00:00:00' },
+    { id: 'u0', nome: 'Administrador', login: 'admin', senhaHash: legacyHash('admin123'), idSetor: null, role: 'admin', status: 'ativo', criadoEm: '2026-01-01T00:00:00' },
+    { id: 'u1', nome: 'Carlos Silva', login: 'carlos', senhaHash: legacyHash('123456'), idSetor: 's1', role: 'setor', status: 'ativo', criadoEm: '2026-01-15T00:00:00' },
+    { id: 'u2', nome: 'Maria Santos', login: 'maria', senhaHash: legacyHash('123456'), idSetor: 's2', role: 'setor', status: 'ativo', criadoEm: '2026-01-15T00:00:00' },
+    { id: 'u3', nome: 'Pedro Lima', login: 'pedro', senhaHash: legacyHash('123456'), idSetor: 's6', role: 'setor', status: 'inativo', criadoEm: '2026-01-20T00:00:00' },
 ];
 
 const SEED_CLIENTES: Cliente[] = [
@@ -233,11 +223,11 @@ interface DataContextType {
     deleteSetor: (id: string) => boolean;
     getSetorNome: (id: string) => string;
     usuarios: User[];
-    addUsuario: (data: Omit<User, 'id' | 'senhaHash' | 'criadoEm'> & { senha: string }) => User | null;
-    updateUsuario: (id: string, data: Partial<Omit<User, 'id' | 'senhaHash' | 'criadoEm'>> & { senha?: string }) => boolean;
+    addUsuario: (data: Omit<User, 'id' | 'senhaHash' | 'criadoEm'> & { senha: string }) => Promise<User | null>;
+    updateUsuario: (id: string, data: Partial<Omit<User, 'id' | 'senhaHash' | 'criadoEm'>> & { senha?: string }) => Promise<boolean>;
     toggleUsuarioStatus: (id: string) => boolean;
     findUserByLogin: (login: string) => User | undefined;
-    validatePassword: (user: User, password: string) => boolean;
+    validatePassword: (user: User, password: string) => Promise<boolean>;
     contratos: Contrato[];
     addContrato: (data: Omit<Contrato, 'id' | 'criadoEm'>) => Contrato;
     updateContrato: (id: string, data: Partial<Omit<Contrato, 'id' | 'criadoEm'>>) => boolean;
@@ -260,7 +250,6 @@ interface DataContextType {
     logs: LogEntry[];
     addLog: (idUsuario: string, nomeUsuario: string, acao: string, detalhes: string) => void;
     enviarWebhook: (tipo: 'gptmaker' | 'n8n', payload: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>;
-    simpleHash: (str: string) => string;
     modelos: ModeloContrato[];
     addModelo: (data: Omit<ModeloContrato, 'id' | 'criadoEm'>) => ModeloContrato;
     updateModelo: (id: string, data: Partial<Omit<ModeloContrato, 'id' | 'criadoEm'>>) => boolean;
@@ -603,10 +592,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }, [setores]);
 
     // --- Usuarios ---
-    const addUsuario = useCallback((data: Omit<User, 'id' | 'senhaHash' | 'criadoEm'> & { senha: string }): User | null => {
+    const addUsuario = useCallback(async (data: Omit<User, 'id' | 'senhaHash' | 'criadoEm'> & { senha: string }): Promise<User | null> => {
         if (usuarios.some(u => u.login.toLowerCase() === data.login.toLowerCase())) return null;
+        const senhaHash = await hashPassword(data.senha);
         const novo: User = {
-            id: 'us_' + generateId(), nome: data.nome, login: data.login, senhaHash: simpleHash(data.senha),
+            id: 'us_' + generateId(), nome: data.nome, login: data.login, senhaHash,
             idSetor: data.idSetor, role: data.role, status: data.status, criadoEm: new Date().toISOString(),
         };
         setUsuarios(prev => [...prev, novo]);
@@ -619,8 +609,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         return novo;
     }, [usuarios]);
 
-    const updateUsuario = useCallback((id: string, data: Partial<Omit<User, 'id' | 'senhaHash' | 'criadoEm'>> & { senha?: string }): boolean => {
+    const updateUsuario = useCallback(async (id: string, data: Partial<Omit<User, 'id' | 'senhaHash' | 'criadoEm'>> & { senha?: string }): Promise<boolean> => {
         if (data.login && usuarios.some(u => u.id !== id && u.login.toLowerCase() === data.login!.toLowerCase())) return false;
+        const senhaHash = data.senha ? await hashPassword(data.senha) : undefined;
         setUsuarios(prev => prev.map(u => {
             if (u.id !== id) return u;
             const updated = { ...u };
@@ -629,7 +620,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             if (data.idSetor !== undefined) updated.idSetor = data.idSetor;
             if (data.role !== undefined) updated.role = data.role;
             if (data.status !== undefined) updated.status = data.status;
-            if (data.senha) updated.senhaHash = simpleHash(data.senha);
+            if (senhaHash) updated.senhaHash = senhaHash;
             return updated;
         }));
         const dbUpdate: Record<string, unknown> = {};
@@ -638,7 +629,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         if (data.idSetor !== undefined) dbUpdate.id_setor = data.idSetor;
         if (data.role !== undefined) dbUpdate.role = data.role;
         if (data.status !== undefined) dbUpdate.status = data.status;
-        if (data.senha) dbUpdate.senha_hash = simpleHash(data.senha);
+        if (senhaHash) dbUpdate.senha_hash = senhaHash;
         supabase.from('usuarios').update(dbUpdate).eq('id', id).then(({ error }) => {
             if (error) console.error('Failed to update usuario:', error);
         });
@@ -664,8 +655,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         return usuarios.find(u => u.login.toLowerCase() === login.toLowerCase());
     }, [usuarios]);
 
-    const validatePassword = useCallback((user: User, password: string): boolean => {
-        return user.senhaHash === simpleHash(password);
+    const validatePassword = useCallback(async (user: User, password: string): Promise<boolean> => {
+        return verifyPassword(password, user.senhaHash);
     }, []);
 
     // --- Contratos ---
@@ -986,7 +977,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             appConfig, setAppConfig,
             logs, addLog,
             enviarWebhook,
-            simpleHash,
             modelos, addModelo, updateModelo, deleteModelo,
             clientes, addCliente, updateCliente, deleteCliente,
             empresas, addEmpresa, updateEmpresa, deleteEmpresa,
