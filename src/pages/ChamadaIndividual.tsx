@@ -78,10 +78,25 @@ const ChamadaIndividual = () => {
             osc.start(ctx.currentTime);
             osc.stop(ctx.currentTime + 0.6);
 
-            const utterance = new SpeechSynthesisUtterance(`Paciente, ${name}. Favor dirigir-se ao ${room || 'consultório'}`);
-            utterance.lang = "pt-BR";
-            utterance.rate = 0.9;
-            window.speechSynthesis.speak(utterance);
+            // Wait 10 seconds before playing the voice
+            setTimeout(() => {
+                if (!window.speechSynthesis) return;
+
+                window.speechSynthesis.cancel();
+
+                const utterance = new SpeechSynthesisUtterance(`Paciente, ${name}. Favor dirigir-se ao ${room || 'consultório'}`);
+                utterance.lang = "pt-BR";
+                utterance.rate = 0.85;
+
+                const voices = window.speechSynthesis.getVoices();
+                const preferredVoice = voices.find(v => v.lang.includes("pt-BR") && v.name.toLowerCase().includes("maria")) ||
+                    voices.find(v => v.lang.includes("pt-BR") && v.name.toLowerCase().includes("google")) ||
+                    voices.find(v => v.lang.includes("pt-BR"));
+
+                if (preferredVoice) utterance.voice = preferredVoice;
+
+                window.speechSynthesis.speak(utterance);
+            }, 10000);
         } catch (e) {
             console.error("Audio error:", e);
         }

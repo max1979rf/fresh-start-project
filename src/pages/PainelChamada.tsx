@@ -61,10 +61,28 @@ const PainelChamada = () => {
             osc.start(ctx.currentTime);
             osc.stop(ctx.currentTime + 0.6);
 
-            const utterance = new SpeechSynthesisUtterance(`Paciente, ${name}. Favor dirigir-se ao ${room || 'consultório'}`);
-            utterance.lang = "pt-BR";
-            utterance.rate = 0.9;
-            window.speechSynthesis.speak(utterance);
+            // Wait 10 seconds before playing the voice
+            setTimeout(() => {
+                if (!window.speechSynthesis) return;
+
+                // Cancel any ongoing speech to avoid overlapping
+                window.speechSynthesis.cancel();
+
+                const utterance = new SpeechSynthesisUtterance(`Paciente, ${name}. Favor dirigir-se ao ${room || 'consultório'}`);
+                utterance.lang = "pt-BR";
+                utterance.rate = 0.85; // Slightly slower for clarity
+                utterance.pitch = 1.0;
+
+                // Try to find a better voice (prefer Brazilian female if possible)
+                const voices = window.speechSynthesis.getVoices();
+                const preferredVoice = voices.find(v => v.lang.includes("pt-BR") && v.name.toLowerCase().includes("maria")) ||
+                    voices.find(v => v.lang.includes("pt-BR") && v.name.toLowerCase().includes("google")) ||
+                    voices.find(v => v.lang.includes("pt-BR"));
+
+                if (preferredVoice) utterance.voice = preferredVoice;
+
+                window.speechSynthesis.speak(utterance);
+            }, 10000);
         } catch (e) {
             console.error("Audio/Voice error:", e);
         }
