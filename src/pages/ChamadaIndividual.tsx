@@ -3,6 +3,9 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Monitor, Clock, ArrowLeft, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
+const CHANNEL_NAME = "fresh-start-patient-calls";
 
 const ChamadaIndividual = () => {
     const { id } = useParams();
@@ -94,7 +97,7 @@ const ChamadaIndividual = () => {
         };
 
         const broadcastChannel = supabase
-            .channel("individual-broadcast")
+            .channel(CHANNEL_NAME)
             .on("broadcast", { event: "patient-called" }, ({ payload }) => handleNewCall(payload))
             .subscribe();
 

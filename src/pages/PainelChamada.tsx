@@ -82,7 +82,7 @@ const PainelChamada = () => {
         };
 
         const broadcastChannel = supabase
-            .channel("broadcast-receiver")
+            .channel(CHANNEL_NAME)
             .on(
                 "broadcast",
                 { event: "patient-called" },
