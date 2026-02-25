@@ -41,7 +41,7 @@ export interface Contrato {
   empresa: string;
   objeto: string;
   tipo: string;
-  idSetor: string;
+  idSetor: string | null;
   valor: string;
   status: 'Vigente' | 'Vencendo' | 'Vencido' | 'Encerrado' | 'Quitado' | 'Em Aberto';
   dataInicio: string;

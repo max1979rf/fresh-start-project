@@ -90,7 +90,7 @@ function mapContratoFromDB(row: Record<string, unknown>): Contrato {
         empresa: row.empresa as string,
         objeto: row.objeto as string,
         tipo: row.tipo as string,
-        idSetor: row.id_setor as string,
+        idSetor: (row.id_setor as string) || null,
         valor: row.valor as string,
         status: row.status as Contrato['status'],
         dataInicio: row.data_inicio as string,
@@ -593,7 +593,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
         // Update local state for orphaned records
         setUsuarios(prev => prev.map(u => u.idSetor === id ? { ...u, idSetor: null } : u));
-        setContratos(prev => prev.map(c => c.idSetor === id ? { ...c, idSetor: null as any } : c));
+        setContratos(prev => prev.map(c => c.idSetor === id ? { ...c, idSetor: null } : c));
 
         supabase.from('setores').delete().eq('id', id).then(({ error }) => {
             if (error) console.error('Failed to delete setor:', error);
@@ -602,7 +602,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }, [setSetores, setUsuarios, setContratos]);
 
 
-    const getSetorNome = useCallback((id: string): string => {
+    const getSetorNome = useCallback((id: string | null): string => {
+        if (!id) return '—';
         return setores.find(s => s.id === id)?.nome || '—';
     }, [setores]);
 
