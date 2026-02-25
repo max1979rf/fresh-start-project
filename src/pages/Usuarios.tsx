@@ -18,7 +18,7 @@ export default function Usuarios() {
     const [login, setLogin] = useState("");
     const [senha, setSenha] = useState("");
     const [senhaConfirm, setSenhaConfirm] = useState("");
-    const [idSetor, setIdSetor] = useState<string>("");
+    const [idSetor, setIdSetor] = useState<string | null>("");
     const [role, setRole] = useState<'admin' | 'setor'>('setor');
     const [status, setStatus] = useState<'ativo' | 'inativo'>('ativo');
 

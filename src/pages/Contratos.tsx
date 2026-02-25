@@ -81,7 +81,7 @@ export default function Contratos() {
   const [empresa, setEmpresa] = useState("");
   const [objeto, setObjeto] = useState("");
   const [tipo, setTipo] = useState<string>("Serviços de TI");
-  const [idSetor, setIdSetor] = useState("");
+  const [idSetor, setIdSetor] = useState<string | null>(null);
   const [valor, setValor] = useState("");
   const [statusContrato, setStatusContrato] = useState<string>('Vigente');
   const [dataInicio, setDataInicio] = useState("");
@@ -796,7 +796,7 @@ export default function Contratos() {
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground">Setor *</label>
-                <select value={idSetor} onChange={(e) => setIdSetor(e.target.value)} disabled={!isAdmin}
+                <select value={idSetor || ""} onChange={(e) => setIdSetor(e.target.value)} disabled={!isAdmin}
                   className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-60">
                   <option value="">Selecione...</option>
                   {setores.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
@@ -1014,7 +1014,7 @@ export default function Contratos() {
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground hidden md:table-cell">Valor</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Parcelas</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground hidden lg:table-cell">Vencidas</th>
-                
+
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Status</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground hidden xl:table-cell">Vencimento</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Ações</th>
