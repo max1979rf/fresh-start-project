@@ -31,6 +31,7 @@ export default function Relatorios() {
     const [reportType, setReportType] = useState<ReportType>('contratos');
     const [filtersOpen, setFiltersOpen] = useState(false);
     const reportRef = useRef<HTMLDivElement>(null);
+    const [selectedContratos, setSelectedContratos] = useState<Set<string>>(new Set());
 
     // Filters
     const [filterSetor, setFilterSetor] = useState("");
@@ -61,6 +62,8 @@ export default function Relatorios() {
       .footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid #ddd; font-size: 9px; color: #999; text-align: center; }
       .meta { font-size: 10px; color: #888; margin-bottom: 8px; }
       @media print { body { padding: 12px; } }
+      .no-print { display: none !important; }
+      .print-hidden { display: none !important; }
     </style></head><body>`);
         printWin.document.write(printArea.innerHTML);
         printWin.document.write('</body></html>');
@@ -70,7 +73,9 @@ export default function Relatorios() {
 
     // --- DOCX Export ---
     const handleExportDocx = async () => {
-        const data = reportData as any[];
+        const data = reportType === 'contratos' && selectedContratos.size > 0
+            ? (reportData as typeof contratos).filter(c => selectedContratos.has(c.id))
+            : reportData as any[];
         if (!data || data.length === 0) return;
 
         const now = new Date();
@@ -242,11 +247,29 @@ export default function Relatorios() {
 
     const renderTable = () => {
         switch (reportType) {
-            case 'contratos':
+            case 'contratos': {
+                const contratosData = reportData as typeof contratos;
+                const allSelected = contratosData.length > 0 && selectedContratos.size === contratosData.length;
+                const hasSelection = selectedContratos.size > 0;
                 return (
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <thead>
                             <tr className="bg-muted/30">
+                                <th className="no-print px-4 py-2.5 border-b-2 border-border w-10 text-center">
+                                    <input
+                                        type="checkbox"
+                                        checked={allSelected}
+                                        onChange={() => {
+                                            if (allSelected) {
+                                                setSelectedContratos(new Set());
+                                            } else {
+                                                setSelectedContratos(new Set(contratosData.map(c => c.id)));
+                                            }
+                                        }}
+                                        className="rounded border-input cursor-pointer"
+                                        title="Selecionar todos"
+                                    />
+                                </th>
                                 <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider border-b-2 border-border">Nº</th>
                                 <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider border-b-2 border-border">Empresa</th>
                                 <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider border-b-2 border-border">Objeto / Descrição</th>
@@ -258,8 +281,23 @@ export default function Relatorios() {
                             </tr>
                         </thead>
                         <tbody>
-                            {(reportData as typeof contratos).map((c) => (
-                                <tr key={c.id} className="border-b border-border/30 hover:bg-muted/10">
+                            {contratosData.map((c) => (
+                                <tr key={c.id} className={`border-b border-border/30 hover:bg-muted/10 ${hasSelection && !selectedContratos.has(c.id) ? 'print-hidden' : ''}`}>
+                                    <td className="no-print px-4 py-2 text-center">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedContratos.has(c.id)}
+                                            onChange={() => {
+                                                setSelectedContratos(prev => {
+                                                    const next = new Set(prev);
+                                                    if (next.has(c.id)) next.delete(c.id);
+                                                    else next.add(c.id);
+                                                    return next;
+                                                });
+                                            }}
+                                            className="rounded border-input cursor-pointer"
+                                        />
+                                    </td>
                                     <td className="px-4 py-2 text-xs font-medium">{c.numero} {c.excluido && <span className="text-[9px] text-red-500 ml-1">(excluído)</span>}</td>
                                     <td className="px-4 py-2 text-xs text-muted-foreground">{c.empresa}</td>
                                     <td className="px-4 py-2 text-xs text-muted-foreground max-w-[200px] truncate">{c.objeto || c.descricao}</td>
@@ -275,6 +313,7 @@ export default function Relatorios() {
                         </tbody>
                     </table>
                 );
+            }
             case 'setores':
                 return (
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
