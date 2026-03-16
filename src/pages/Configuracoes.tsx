@@ -4,9 +4,9 @@ import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
 import {
-  Settings, Upload, Save, Check, AlertCircle, X, Image, Link2, Bell,
+  Settings, Upload, Save, Check, AlertCircle, X, Image, Bell,
   Trash2, Brain, Key, Copy, RefreshCw, CheckCircle2, Shield, Code, Loader2,
-  Mail, Power, ChevronDown, ChevronUp, Coins, Cloud, CloudOff, Bot
+  Power, ChevronDown, ChevronUp, Coins, Cloud, CloudOff
 } from "lucide-react";
 import { useData } from "../contexts/DataContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -454,14 +454,8 @@ export default function Configuracoes() {
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
 
     setAppConfig({
-      webhookGptMaker: webhookGptMaker.trim() || undefined,
-      webhookN8n: webhookN8n.trim() || undefined,
-      gptMakerAgentId: gptMakerAgentId.trim() || undefined,
-      gptMakerApiKey: gptMakerApiKey.trim() || undefined,
       nomeEmpresa: nomeEmpresa.trim() || undefined,
-      alertaEmailAtivo,
       alertasAtivos,
-      emailsAlertaSetor: emailsSetor,
       llmProvider: llmProvider as AppConfig['llmProvider'],
       llmApiKey: llmApiKey.trim() || undefined,
       llmModel: llmModel.trim() || undefined,
