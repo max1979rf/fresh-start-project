@@ -191,18 +191,10 @@ export default function Configuracoes() {
 
   // --- Identity ---
   const [nomeEmpresa, setNomeEmpresa] = useState(appConfig.nomeEmpresa || "");
-  const [alertaEmailAtivo, setAlertaEmailAtivo] = useState(appConfig.alertaEmailAtivo || false);
   const [alertasAtivos, setAlertasAtivos] = useState(appConfig.alertasAtivos !== false); // default true
-  const [emailsSetor, setEmailsSetor] = useState<Record<string, string>>(appConfig.emailsAlertaSetor || {});
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedEndpoint, setExpandedEndpoint] = useState<number | null>(null);
-
-  // --- Webhooks ---
-  const [webhookGptMaker, setWebhookGptMaker] = useState(appConfig.webhookGptMaker || "");
-  const [webhookN8n, setWebhookN8n] = useState(appConfig.webhookN8n || "");
-  const [gptMakerAgentId, setGptMakerAgentId] = useState(appConfig.gptMakerAgentId || "");
-  const [gptMakerApiKey, setGptMakerApiKey] = useState(appConfig.gptMakerApiKey || "");
 
   // --- LLM (RF01) ---
   const [llmProvider, setLlmProvider] = useState<'openai' | 'anthropic' | 'google' | 'meta' | 'mistral' | 'cohere' | 'deepseek' | 'groq' | 'perplexity' | 'xai' | 'gptmaker' | 'custom'>(appConfig.llmProvider || "openai");
@@ -223,8 +215,6 @@ export default function Configuracoes() {
   const [llmTopP, setLlmTopP] = useState(appConfig.llmTopP ?? 1);
   const [llmFrequencyPenalty, setLlmFrequencyPenalty] = useState(appConfig.llmFrequencyPenalty ?? 0);
   const [llmPresencePenalty, setLlmPresencePenalty] = useState(appConfig.llmPresencePenalty ?? 0);
-  const [gptMakerTesting, setGptMakerTesting] = useState(false);
-  const [gptMakerTestResult, setGptMakerTestResult] = useState<{ ok: boolean; message: string } | null>(null);
 
   // --- Sync local state once Supabase data is loaded ---
   // useState() captures values at component mount — BEFORE the async fetch from Supabase
@@ -236,13 +226,7 @@ export default function Configuracoes() {
     configSyncedRef.current = true;
 
     setNomeEmpresa(appConfig.nomeEmpresa || "");
-    setAlertaEmailAtivo(appConfig.alertaEmailAtivo ?? false);
     setAlertasAtivos(appConfig.alertasAtivos !== false);
-    setEmailsSetor(appConfig.emailsAlertaSetor || {});
-    setWebhookGptMaker(appConfig.webhookGptMaker || "");
-    setWebhookN8n(appConfig.webhookN8n || "");
-    setGptMakerAgentId(appConfig.gptMakerAgentId || "");
-    setGptMakerApiKey(appConfig.gptMakerApiKey || "");
     if (appConfig.llmProvider) setLlmProvider(appConfig.llmProvider);
     setLlmApiKey(appConfig.llmApiKey || "");
     setLlmModel(appConfig.llmModel || "gpt-4o-mini");
@@ -280,13 +264,7 @@ export default function Configuracoes() {
     autoSaveTimer.current = setTimeout(() => {
       setAppConfig({
         nomeEmpresa:          nomeEmpresa.trim()       || undefined,
-        alertaEmailAtivo,
         alertasAtivos,
-        emailsAlertaSetor:    emailsSetor,
-        webhookGptMaker:      webhookGptMaker.trim()   || undefined,
-        webhookN8n:           webhookN8n.trim()        || undefined,
-        gptMakerAgentId:      gptMakerAgentId.trim()   || undefined,
-        gptMakerApiKey:       gptMakerApiKey.trim()    || undefined,
         llmProvider:          llmProvider as AppConfig['llmProvider'],
         llmApiKey:            llmApiKey.trim()         || undefined,
         llmModel:             llmModel.trim()          || undefined,
@@ -311,8 +289,7 @@ export default function Configuracoes() {
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    nomeEmpresa, alertaEmailAtivo, alertasAtivos, emailsSetor,
-    webhookGptMaker, webhookN8n, gptMakerAgentId, gptMakerApiKey,
+    nomeEmpresa, alertasAtivos,
     llmProvider, llmApiKey, llmModel, llmBaseUrl, llmStatus,
     llmCustomPrompt, llmKnowledgeBase, llmTone, llmSpecialization,
     llmExamples, llmTemperature, llmTopP, llmFrequencyPenalty, llmPresencePenalty,
@@ -452,45 +429,6 @@ export default function Configuracoes() {
     }
   }, [llmApiKey, llmProvider, llmModel, llmBaseUrl, addLog, currentUser, appConfig, setAppConfig]);
 
-  // --- Test GPTMaker Connection ---
-  const handleTestGptMaker = useCallback(async () => {
-    if (!gptMakerAgentId.trim() || !gptMakerApiKey.trim()) {
-      setGptMakerTestResult({ ok: false, message: "Preencha o ID do Agente e a API Key." });
-      return;
-    }
-    setGptMakerTesting(true);
-    setGptMakerTestResult(null);
-    try {
-      const baseUrl = webhookGptMaker.trim() || 'https://api.gptmaker.ai';
-      const resp = await fetch(`${baseUrl}/v2/agent/${gptMakerAgentId.trim()}/conversation`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${gptMakerApiKey.trim()}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contextId: `test-${Date.now()}`,
-          prompt: 'Olá, este é um teste de conexão. Responda brevemente.',
-        }),
-      });
-      if (resp.ok) {
-        const data = await resp.json();
-        setGptMakerTestResult({ ok: true, message: data.message || 'Conexão bem-sucedida!' });
-        addLog(currentUser!.id, currentUser!.nome, "GPTMaker testado", "Conexão OK");
-        toast({ title: "✅ GPTMaker conectado!", description: "O agente respondeu com sucesso." });
-      } else {
-        const body = await resp.text();
-        setGptMakerTestResult({ ok: false, message: `Erro ${resp.status}: ${body.substring(0, 150)}` });
-        toast({ title: "❌ Erro na conexão", description: `Status ${resp.status}`, variant: "destructive" });
-      }
-    } catch (err) {
-      setGptMakerTestResult({ ok: false, message: `Erro de rede: ${err instanceof Error ? err.message : 'desconhecido'}` });
-      toast({ title: "❌ Falha na conexão", description: "Verifique o endpoint e as credenciais.", variant: "destructive" });
-    } finally {
-      setGptMakerTesting(false);
-    }
-  }, [gptMakerAgentId, gptMakerApiKey, webhookGptMaker, addLog, currentUser]);
-
   // --- Generate API Key ---
   const handleGenerateApiKey = () => {
     const newKey = generateApiKey();
@@ -511,11 +449,6 @@ export default function Configuracoes() {
   };
 
   // --- Save all ---
-  // --- Update per-sector email ---
-  const handleEmailSetorChange = (setorId: string, email: string) => {
-    setEmailsSetor(prev => ({ ...prev, [setorId]: email }));
-  };
-
   const handleSaveAll = () => {
     // Cancel any pending auto-save timer so we don't double-write
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
