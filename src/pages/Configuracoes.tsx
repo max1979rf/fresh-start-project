@@ -6,7 +6,7 @@ import { toast } from "@/hooks/use-toast";
 import {
   Settings, Upload, Save, Check, AlertCircle, X, Image, Bell,
   Trash2, Brain, Key, Copy, RefreshCw, CheckCircle2, Shield, Code, Loader2,
-  Power, ChevronDown, ChevronUp, Coins, Cloud, CloudOff
+  Power, ChevronDown, ChevronUp, Coins, Cloud, CloudOff, Mail, Send
 } from "lucide-react";
 import { useData } from "../contexts/DataContext";
 import { useAuth } from "../contexts/AuthContext";
