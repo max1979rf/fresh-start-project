@@ -230,6 +230,7 @@ export default function Configuracoes() {
 
     setNomeEmpresa(appConfig.nomeEmpresa || "");
     setAlertasAtivos(appConfig.alertasAtivos !== false);
+    setEmailsAlertaSetor(appConfig.emailsAlertaSetor || {});
     if (appConfig.llmProvider) setLlmProvider(appConfig.llmProvider);
     setLlmApiKey(appConfig.llmApiKey || "");
     setLlmModel(appConfig.llmModel || "gpt-4o-mini");
