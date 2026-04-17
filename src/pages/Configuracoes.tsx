@@ -269,6 +269,7 @@ export default function Configuracoes() {
       setAppConfig({
         nomeEmpresa:          nomeEmpresa.trim()       || undefined,
         alertasAtivos,
+        emailsAlertaSetor,
         llmProvider:          llmProvider as AppConfig['llmProvider'],
         llmApiKey:            llmApiKey.trim()         || undefined,
         llmModel:             llmModel.trim()          || undefined,
