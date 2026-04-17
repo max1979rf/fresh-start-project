@@ -192,6 +192,9 @@ export default function Configuracoes() {
   // --- Identity ---
   const [nomeEmpresa, setNomeEmpresa] = useState(appConfig.nomeEmpresa || "");
   const [alertasAtivos, setAlertasAtivos] = useState(appConfig.alertasAtivos !== false); // default true
+  const [emailsAlertaSetor, setEmailsAlertaSetor] = useState<Record<string, string>>(appConfig.emailsAlertaSetor || {});
+  const [testEmailSetorId, setTestEmailSetorId] = useState<string>("");
+  const [testingEmail, setTestingEmail] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedEndpoint, setExpandedEndpoint] = useState<number | null>(null);
