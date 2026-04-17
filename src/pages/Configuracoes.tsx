@@ -1344,79 +1344,58 @@ export default function Configuracoes() {
               <Send className="w-4 h-4 text-muted-foreground" />
               <p className="text-sm font-medium text-foreground">Testar envio de e-mail</p>
             </div>
-            {(() => {
-              const destinatarios = setores
-                .map(s => ({ setor: s, email: emailsAlertaSetor[s.id]?.trim() }))
-                .filter(d => !!d.email);
-              return (
-                <>
-                  <div className="p-3 rounded-lg bg-muted/10 border border-border/50">
-                    {destinatarios.length === 0 ? (
-                      <p className="text-xs text-muted-foreground italic">
-                        Nenhum e-mail configurado acima. Configure ao menos um setor para testar.
-                      </p>
-                    ) : (
-                      <>
-                        <p className="text-[11px] text-muted-foreground mb-1.5">
-                          O teste será enviado para <strong className="text-foreground">{destinatarios.length}</strong> destinatário(s):
-                        </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {destinatarios.map(d => (
-                            <span key={d.setor.id} className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-                              {d.setor.nome}: {d.email}
-                            </span>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                  <button
-                    disabled={destinatarios.length === 0 || testingEmail}
-                    onClick={async () => {
-                      setTestingEmail(true);
-                      try {
-                        const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-                        const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-                        const results = await Promise.allSettled(
-                          destinatarios.map(d =>
-                            fetch(`https://${projectId}.supabase.co/functions/v1/send-alert-email`, {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json", Authorization: `Bearer ${anonKey}` },
-                              body: JSON.stringify({
-                                to: d.email,
-                                subject: "✅ Teste de alerta — " + (nomeEmpresa || "Sistema"),
-                                message: `Este é um e-mail de teste enviado pelo sistema de alertas.\n\nSetor: ${d.setor.nome}\nDestinatário: ${d.email}\n\nSe você recebeu este e-mail, a configuração de alertas está funcionando corretamente.`,
-                              }),
-                            }).then(async r => {
-                              if (!r.ok) throw new Error((await r.json()).error || `HTTP ${r.status}`);
-                              return r.json();
-                            })
-                          )
-                        );
-                        const ok = results.filter(r => r.status === "fulfilled").length;
-                        const fail = results.length - ok;
-                        if (fail === 0) {
-                          toast({ title: "✅ Todos enviados!", description: `${ok} e-mail(s) de teste enviados com sucesso.` });
-                        } else if (ok === 0) {
-                          const firstErr = (results.find(r => r.status === "rejected") as PromiseRejectedResult | undefined)?.reason?.message || "Erro desconhecido";
-                          toast({ title: "❌ Falha no envio", description: firstErr, variant: "destructive" });
-                        } else {
-                          toast({ title: "⚠️ Envio parcial", description: `${ok} enviado(s), ${fail} falharam.`, variant: "destructive" });
-                        }
-                      } catch (err: any) {
-                        toast({ title: "❌ Erro", description: err.message, variant: "destructive" });
-                      } finally {
-                        setTestingEmail(false);
+            <div className="flex items-center gap-2">
+              <select
+                value={testEmailSetorId}
+                onChange={(e) => setTestEmailSetorId(e.target.value)}
+                className="flex-1 px-3 py-1.5 text-xs bg-background border border-border rounded-md text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              >
+                <option value="">Selecione um setor...</option>
+                {setores.filter(s => emailsAlertaSetor[s.id]).map(setor => (
+                  <option key={setor.id} value={setor.id}>
+                    {setor.nome} → {emailsAlertaSetor[setor.id]}
+                  </option>
+                ))}
+              </select>
+              <button
+                disabled={!testEmailSetorId || testingEmail}
+                onClick={async () => {
+                  const email = emailsAlertaSetor[testEmailSetorId];
+                  if (!email) return;
+                  setTestingEmail(true);
+                  try {
+                    const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+                    const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+                    const res = await fetch(
+                      `https://${projectId}.supabase.co/functions/v1/send-alert-email`,
+                      {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json", Authorization: `Bearer ${anonKey}` },
+                        body: JSON.stringify({
+                          to: email,
+                          subject: "✅ Teste de alerta — " + (nomeEmpresa || "Sistema"),
+                          message: `Este é um e-mail de teste enviado pelo sistema de alertas.\n\nSetor: ${setores.find(s => s.id === testEmailSetorId)?.nome}\nDestinatário: ${email}\n\nSe você recebeu este e-mail, a configuração de alertas está funcionando corretamente.`,
+                        }),
                       }
-                    }}
-                    className="w-full px-4 py-2 text-xs font-medium bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
-                  >
-                    {testingEmail ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                    Enviar teste para todos
-                  </button>
-                </>
-              );
-            })()}
+                    );
+                    const data = await res.json();
+                    if (res.ok) {
+                      toast({ title: "✅ E-mail enviado!", description: `Verifique a caixa de entrada de ${email}` });
+                    } else {
+                      toast({ title: "❌ Falha no envio", description: data.error || "Erro desconhecido", variant: "destructive" });
+                    }
+                  } catch (err: any) {
+                    toast({ title: "❌ Erro", description: err.message, variant: "destructive" });
+                  } finally {
+                    setTestingEmail(false);
+                  }
+                }}
+                className="px-4 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+              >
+                {testingEmail ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                Enviar teste
+              </button>
+            </div>
             <p className="text-[11px] text-muted-foreground">
               Requer a secret <code className="px-1 py-0.5 bg-muted/40 rounded">RESEND_API_KEY</code> configurada no projeto.
             </p>
