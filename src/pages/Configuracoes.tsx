@@ -6,7 +6,7 @@ import { toast } from "@/hooks/use-toast";
 import {
   Settings, Upload, Save, Check, AlertCircle, X, Image, Bell,
   Trash2, Brain, Key, Copy, RefreshCw, CheckCircle2, Shield, Code, Loader2,
-  Power, ChevronDown, ChevronUp, Coins, Cloud, CloudOff
+  Power, ChevronDown, ChevronUp, Coins, Cloud, CloudOff, Mail, Send
 } from "lucide-react";
 import { useData } from "../contexts/DataContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -192,6 +192,9 @@ export default function Configuracoes() {
   // --- Identity ---
   const [nomeEmpresa, setNomeEmpresa] = useState(appConfig.nomeEmpresa || "");
   const [alertasAtivos, setAlertasAtivos] = useState(appConfig.alertasAtivos !== false); // default true
+  const [emailsAlertaSetor, setEmailsAlertaSetor] = useState<Record<string, string>>(appConfig.emailsAlertaSetor || {});
+  const [testEmailSetorId, setTestEmailSetorId] = useState<string>("");
+  const [testingEmail, setTestingEmail] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedEndpoint, setExpandedEndpoint] = useState<number | null>(null);
@@ -227,6 +230,7 @@ export default function Configuracoes() {
 
     setNomeEmpresa(appConfig.nomeEmpresa || "");
     setAlertasAtivos(appConfig.alertasAtivos !== false);
+    setEmailsAlertaSetor(appConfig.emailsAlertaSetor || {});
     if (appConfig.llmProvider) setLlmProvider(appConfig.llmProvider);
     setLlmApiKey(appConfig.llmApiKey || "");
     setLlmModel(appConfig.llmModel || "gpt-4o-mini");
@@ -265,6 +269,7 @@ export default function Configuracoes() {
       setAppConfig({
         nomeEmpresa:          nomeEmpresa.trim()       || undefined,
         alertasAtivos,
+        emailsAlertaSetor,
         llmProvider:          llmProvider as AppConfig['llmProvider'],
         llmApiKey:            llmApiKey.trim()         || undefined,
         llmModel:             llmModel.trim()          || undefined,
@@ -289,7 +294,7 @@ export default function Configuracoes() {
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    nomeEmpresa, alertasAtivos,
+    nomeEmpresa, alertasAtivos, emailsAlertaSetor,
     llmProvider, llmApiKey, llmModel, llmBaseUrl, llmStatus,
     llmCustomPrompt, llmKnowledgeBase, llmTone, llmSpecialization,
     llmExamples, llmTemperature, llmTopP, llmFrequencyPenalty, llmPresencePenalty,
@@ -456,6 +461,7 @@ export default function Configuracoes() {
     setAppConfig({
       nomeEmpresa: nomeEmpresa.trim() || undefined,
       alertasAtivos,
+      emailsAlertaSetor,
       llmProvider: llmProvider as AppConfig['llmProvider'],
       llmApiKey: llmApiKey.trim() || undefined,
       llmModel: llmModel.trim() || undefined,
@@ -1297,6 +1303,104 @@ export default function Configuracoes() {
             {alertasAtivos ? '✅ Ativado' : '⏸️ Desativado'}
           </button>
         </div>
+
+        {/* E-mails por Setor */}
+        <div className="space-y-3 pt-2">
+          <div className="flex items-center gap-2">
+            <Mail className="w-4 h-4 text-muted-foreground" />
+            <p className="text-sm font-medium text-foreground">E-mail destinatário por setor</p>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Configure o e-mail que receberá os alertas de cada setor (vencimento de contratos, cláusulas abusivas, etc.).
+          </p>
+          {setores.length === 0 ? (
+            <p className="text-xs text-muted-foreground italic p-3 bg-muted/20 rounded-lg border border-border/50">
+              Nenhum setor cadastrado. Cadastre setores na página "Setores" primeiro.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {setores.map(setor => (
+                <div key={setor.id} className="flex items-center gap-2 p-2 rounded-lg bg-muted/10 border border-border/50">
+                  <span className="text-xs font-medium text-foreground min-w-[140px] truncate" title={setor.nome}>
+                    {setor.nome}
+                  </span>
+                  <input
+                    type="email"
+                    value={emailsAlertaSetor[setor.id] || ""}
+                    onChange={(e) => setEmailsAlertaSetor(prev => ({ ...prev, [setor.id]: e.target.value }))}
+                    placeholder="email@empresa.com"
+                    className="flex-1 px-3 py-1.5 text-xs bg-background border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Teste de envio de e-mail */}
+        {setores.length > 0 && (
+          <div className="space-y-3 pt-2 border-t border-border/50">
+            <div className="flex items-center gap-2">
+              <Send className="w-4 h-4 text-muted-foreground" />
+              <p className="text-sm font-medium text-foreground">Testar envio de e-mail</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <select
+                value={testEmailSetorId}
+                onChange={(e) => setTestEmailSetorId(e.target.value)}
+                className="flex-1 px-3 py-1.5 text-xs bg-background border border-border rounded-md text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              >
+                <option value="">Selecione um setor...</option>
+                {setores.filter(s => emailsAlertaSetor[s.id]).map(setor => (
+                  <option key={setor.id} value={setor.id}>
+                    {setor.nome} → {emailsAlertaSetor[setor.id]}
+                  </option>
+                ))}
+              </select>
+              <button
+                disabled={!testEmailSetorId || testingEmail}
+                onClick={async () => {
+                  const email = emailsAlertaSetor[testEmailSetorId];
+                  if (!email) return;
+                  setTestingEmail(true);
+                  try {
+                    const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+                    const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+                    const res = await fetch(
+                      `https://${projectId}.supabase.co/functions/v1/send-alert-email`,
+                      {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json", Authorization: `Bearer ${anonKey}` },
+                        body: JSON.stringify({
+                          to: email,
+                          subject: "✅ Teste de alerta — " + (nomeEmpresa || "Sistema"),
+                          message: `Este é um e-mail de teste enviado pelo sistema de alertas.\n\nSetor: ${setores.find(s => s.id === testEmailSetorId)?.nome}\nDestinatário: ${email}\n\nSe você recebeu este e-mail, a configuração de alertas está funcionando corretamente.`,
+                        }),
+                      }
+                    );
+                    const data = await res.json();
+                    if (res.ok) {
+                      toast({ title: "✅ E-mail enviado!", description: `Verifique a caixa de entrada de ${email}` });
+                    } else {
+                      toast({ title: "❌ Falha no envio", description: data.error || "Erro desconhecido", variant: "destructive" });
+                    }
+                  } catch (err: any) {
+                    toast({ title: "❌ Erro", description: err.message, variant: "destructive" });
+                  } finally {
+                    setTestingEmail(false);
+                  }
+                }}
+                className="px-4 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+              >
+                {testingEmail ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                Enviar teste
+              </button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Requer a secret <code className="px-1 py-0.5 bg-muted/40 rounded">RESEND_API_KEY</code> configurada no projeto.
+            </p>
+          </div>
+        )}
 
       </div>
 
