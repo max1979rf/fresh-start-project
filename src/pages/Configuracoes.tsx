@@ -294,7 +294,7 @@ export default function Configuracoes() {
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    nomeEmpresa, alertasAtivos,
+    nomeEmpresa, alertasAtivos, emailsAlertaSetor,
     llmProvider, llmApiKey, llmModel, llmBaseUrl, llmStatus,
     llmCustomPrompt, llmKnowledgeBase, llmTone, llmSpecialization,
     llmExamples, llmTemperature, llmTopP, llmFrequencyPenalty, llmPresencePenalty,
